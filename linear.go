@@ -26,7 +26,7 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 		}
 	}
 
-	if param.SolverType != L2R_LR && param.SolverType != L2R_L2LOSS_SVC {
+	if param.solverType != L2R_LR && param.solverType != L2R_L2LOSS_SVC {
 		return nil, errors.New("Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC")
 	}
 
@@ -42,7 +42,7 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 		model.NumFeatures = n
 	}
 
-	if param.SolverType.SupportVectorRegression {
+	if param.solverType.SupportVectorRegression {
 		model.W = make([]float64, wSize, wSize)
 		model.NumClass = 2
 		model.Label = nil
@@ -51,15 +51,71 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 
 		trainOne(prob, param, model.W, 0, 0)
 	} else {
+		perm := make([]int, l)
+
+		// group training data of the same class
+		var rv = groupClasses(prob, perm)
+		nrClass := rv.nrClass
+		label := rv.label
+		start := rv.start
+		count := rv.count
+
+		checkProblemSize(n, nrClass)
+
+		model.NumClass = nrClass
+		model.Label = make([]int, nrClass)
+		for i := 0; i < nrClass; i++ {
+			model.Label[i] = label[i]
+		}
+
+		// calculate weighted C
+		weightedC := make([]float64, nrClass)
+		for i := 0; i < nrClass; i++ {
+			weightedC[i] = param.c
+		}
+		for i := 0; i < param.getNumWeights(); i++ {
+			var j int
+			for j = 0; j < nrClass; j++ {
+				if param.weightLabel[i] == label[j] {
+					break
+				}
+			}
+			if j == nrClass {
+				panic(fmt.Sprintf("class label %d specified in weight is not found", param.weightLabel[i]))
+			}
+			weightedC[j] *= param.weight[i]
+		}
+
+		// constructing the subproblem
+		x := make([][]Feature, l)
+		for i := 0; i < l; i++ {
+			x[i] = prob.X[perm[i]]
+		}
+
+		subProb := NewProblem(l, n, make([]float64, l), make([][]Feature, l), 0)
+
+		for k := 0; k < subProb.L; k++ {
+			subProb.X[k] = x[k]
+		}
+
+		// multi-class svm by Crammer and Singer
+		if param.solverType == MCSVM_CS {
+			model.W = make([]float64, n*nrClass)
+			for i := 0; i < nrClass; i++ {
+				for j := start[i]; j < start[i]+count[i]; j++ {
+					subProb.Y[j] = float64(i)
+				}
+			}
+		}
 
 	}
 }
 
 func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float64) {
-	eps := param.Eps
+	eps := param.eps
 	epsCg := 0.1
 
-	if param.InitSol != nil {
+	if param.initSol != nil {
 		epsCg = 0.5
 	}
 
@@ -73,7 +129,7 @@ func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float
 	neg := prob.L - pos
 	primalSolverTol := eps * math.Max(math.Min(float64(pos), float64(neg)), 1) / float64(prob.L)
 
-	switch param.SolverType {
+	switch param.solverType {
 
 	case L2R_LR:
 		c := make([]float64, prob.L, prob.L)
@@ -85,7 +141,7 @@ func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float
 			}
 		}
 		funObj := NewL2RLRFunc(prob, c)
-		tronObj := NewTron(funObj, primalSolverTol, param.MaxIters, epsCg)
+		tronObj := NewTron(funObj, primalSolverTol, param.maxIters, epsCg)
 		tronObj.tron(w)
 
 	case L2R_L2LOSS_SVC:
@@ -98,31 +154,31 @@ func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float
 			}
 		}
 		funObj := NewL2RL2SvcFunc(prob, c)
-		tronObj := NewTron(funObj, primalSolverTol, param.MaxIters, epsCg)
+		tronObj := NewTron(funObj, primalSolverTol, param.maxIters, epsCg)
 		tronObj.tron(w)
 
 	case L2R_L2LOSS_SVC_DUAL:
-		solveL2RL1L2Svc(prob, w, eps, cp, cn, L2R_L2LOSS_SVC_DUAL, param.MaxIters)
+		solveL2RL1L2Svc(prob, w, eps, cp, cn, L2R_L2LOSS_SVC_DUAL, param.maxIters)
 
 	case L2R_L1LOSS_SVC_DUAL:
-		solveL2RL1L2Svc(prob, w, eps, cp, cn, L2R_L1LOSS_SVC_DUAL, param.MaxIters)
+		solveL2RL1L2Svc(prob, w, eps, cp, cn, L2R_L1LOSS_SVC_DUAL, param.maxIters)
 
 	case L1R_L2LOSS_SVC:
 		probCol := transpose(prob)
-		solveL1RL2Svc(probCol, w, primalSolverTol, cp, cn, param.MaxIters)
+		solveL1RL2Svc(probCol, w, primalSolverTol, cp, cn, param.maxIters)
 	case L1R_LR:
 		probCol := transpose(prob)
-		solveL1RLR(probCol, w, eps, cp, cn, param.MaxIters)
+		solveL1RLR(probCol, w, eps, cp, cn, param.maxIters)
 	case L2R_LR_DUAL:
-		solveL2RLRDual(prob, w, eps, cp, cn, param.MaxIters)
+		solveL2RLRDual(prob, w, eps, cp, cn, param.maxIters)
 	case L2R_L2LOSS_SVR:
 		c := make([]float64, prob.L)
 		for i := 0; i < prob.L; i++ {
-			c[i] = param.C
+			c[i] = param.c
 		}
 
-		funObj := NewL2RL2SvrFunc(prob, c, param.P)
-		tronObj := NewTron(funObj, param.Eps, param.MaxIters, epsCg)
+		funObj := NewL2RL2SvrFunc(prob, c, param.p)
+		tronObj := NewTron(funObj, param.eps, param.maxIters, epsCg)
 		tronObj.tron(w)
 	case L2R_L1LOSS_SVR_DUAL:
 		fallthrough
@@ -130,18 +186,18 @@ func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float
 		solveL2RL1L2Svr(prob, w, param)
 
 	default:
-		panic(fmt.Sprintf("unknown solver type : %+v", param.SolverType))
+		panic(fmt.Sprintf("unknown solver type : %+v", param.solverType))
 	}
 }
 
 func solveL2RL1L2Svr(prob *Problem, w []float64, param *Parameter) {
 	l := prob.L
-	C := param.C
-	p := param.P
+	C := param.c
+	p := param.p
 	wSize := prob.N
-	eps := param.Eps
+	eps := param.eps
 	var i, s, iter int
-	maxIter := param.MaxIters
+	maxIter := param.maxIters
 	activeSize := l
 	index := make([]int, l)
 
@@ -157,7 +213,7 @@ func solveL2RL1L2Svr(prob *Problem, w []float64, param *Parameter) {
 	lambda := []float64{0.5 / C}
 	upperBound := []float64{math.Inf(1)}
 
-	if param.SolverType == L2R_L1LOSS_SVR_DUAL {
+	if param.solverType == L2R_L1LOSS_SVR_DUAL {
 		lambda[0] = 0
 		upperBound[0] = C
 	}
@@ -1230,10 +1286,13 @@ func swapFloat64Array(array []float64, idxA int, idxB int) {
 	array[idxB] = temp
 }
 
-/*
- * this method corresponds to the following define in the C version:
- * #define GETI(i) (y[i]+1)
- */
+func swapIntArrayPointer(array *IntArrayPointer, idxA int, idxB int) {
+	temp := array.get(idxA)
+	array.set(idxA, array.get(idxB))
+	array.set(idxB, temp)
+}
+
+// GETI method corresponds to the following define in the C version:
 func GETI(y []int8, i int) int {
 	return int(y[i] + 1)
 }
