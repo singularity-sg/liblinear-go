@@ -1,6 +1,9 @@
 package liblinear
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 /**
  * A coordinate descent algorithm for
@@ -87,7 +90,22 @@ func (solver *SolverMCSVMCS) solveSubProblem(Ai float64, yi int, Cyi float64, ac
 		D[yi] += Ai * Cyi
 	}
 
-	//TO BE CONTINUED
+	reversedMergeSortDefault(D)
+
+	beta := D[0] - Ai*Cyi
+	for r = 1; r < activeI && beta < float64(r)*D[r]; r++ {
+		beta += D[r]
+	}
+	beta /= float64(r)
+
+	for r = 0; r < activeI; r++ {
+		if r == yi {
+			alphaNew[r] = math.Min(Cyi, (beta-solver.B[r])/Ai)
+		} else {
+			alphaNew[r] = math.Min(0.0, (beta-solver.B[r])/Ai)
+		}
+	}
+
 }
 
 func (solver *SolverMCSVMCS) solve(w []float64) {
@@ -228,8 +246,74 @@ func (solver *SolverMCSVMCS) solve(w []float64) {
 					solver.B[m] = solver.G[m] - aI*alphaI.get(alphaIndexI.get(m))
 				}
 
+				solver.solveSubProblem(aI, yIndex[i], solver.C[solver.GETI(i)], activeSizeI[i], alphaNew)
+
+				nzD := 0
+				for m = 0; m < activeSizeI[i]; m++ {
+					d := alphaNew[m] - alphaI.get(alphaIndexI.get(m))
+					alphaI.set(alphaIndexI.get(m), alphaNew[m])
+					if math.Abs(d) >= 1e-12 {
+						dInd[nzD] = alphaIndexI.get(m)
+						dVal[nzD] = d
+						nzD++
+					}
+				}
+
+				for _, xi := range solver.prob.X[i] {
+					// wI *float64 = &w[(xi.GetIndex()-1)*nrClass];
+					wOffset := (xi.GetIndex() - 1) * nrClass
+					for m = 0; m < nzD; m++ {
+						w[wOffset+dInd[m]] += dVal[m] * xi.GetValue()
+					}
+				}
 			}
+		}
+
+		iter++
+
+		if iter%10 == 0 {
+			fmt.Print(".")
+		}
+
+		if stopping < epsShrink {
+			if stopping < eps && startFromAll {
+				break
+			} else {
+				activeSize = l
+				for i = 0; i < l; i++ {
+					activeSizeI[i] = nrClass
+				}
+				fmt.Print("*")
+				epsShrink = math.Max(epsShrink/2, eps)
+				startFromAll = true
+			}
+		} else {
+			startFromAll = false
 		}
 	}
 
+	fmt.Printf("\noptimization finished, #iter = %d\n", iter)
+	if iter >= maxIter {
+		fmt.Printf("\nWARNING: reaching max number of iterations\n")
+	}
+
+	// calculate objective value
+
+	var v float64
+	nSV := 0
+	for i = 0; i < wSize*nrClass; i++ {
+		v += w[i] * w[i]
+	}
+	v = 0.5 * v
+	for i = 0; i < l*nrClass; i++ {
+		v += alpha[i]
+		if math.Abs(alpha[i]) > 0 {
+			nSV++
+		}
+	}
+	for i = 0; i < l; i++ {
+		v -= alpha[i*nrClass+int(solver.prob.Y[i])]
+	}
+	fmt.Printf("Objective value = %f\n", v)
+	fmt.Printf("nSV = %d\n", nSV)
 }

@@ -35,16 +35,26 @@ var L2R_L1LOSS_SVR_DUAL = NewSolverType(13, false, true)
 
 // SolverType describes the properties of the solver
 type SolverType struct {
-	LogisticRegressionSolver bool
-	SupportVectorRegression  bool
-	ID                       int
+	logisticRegressionSolver bool
+	supportVectorRegression  bool
+	id                       int
 }
 
 // NewSolverType returns a new SolverType based on input fields
 func NewSolverType(id int, logisticRegressionSolver bool, supportVectorRegression bool) *SolverType {
 	return &SolverType{
-		ID: id,
-		LogisticRegressionSolver: logisticRegressionSolver,
-		SupportVectorRegression:  supportVectorRegression,
+		id: id,
+		logisticRegressionSolver: logisticRegressionSolver,
+		supportVectorRegression:  supportVectorRegression,
 	}
+}
+
+// IsSupportVectorRegression returns if this solver type supports vector regression
+func (solverType *SolverType) IsSupportVectorRegression() bool {
+	return solverType.supportVectorRegression
+}
+
+// IsLogisticRegressionSolver returns if this solver type is a logistic regression solver
+func (solverType *SolverType) IsLogisticRegressionSolver() bool {
+	return solverType.logisticRegressionSolver
 }

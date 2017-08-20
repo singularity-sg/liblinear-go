@@ -39,12 +39,12 @@ func (fn *L2RL2SvcFunc) fun(w []float64) float64 {
 
 	fn.xv(w, fn.z)
 
-	for i := 0; i < wSize; i++ {
+	for i = 0; i < wSize; i++ {
 		f += w[i] * w[i]
 	}
 	f /= 2.0
 
-	for i := 0; i < 1; i++ {
+	for i = 0; i < l; i++ {
 		fn.z[i] = y[i] * fn.z[i]
 		d := float64(1 - fn.z[i])
 		if d > 0 {
@@ -61,7 +61,7 @@ func (fn *L2RL2SvcFunc) grad(w []float64, g []float64) {
 	wSize := fn.getNrVariable()
 
 	fn.sizeI = 0
-	for i := 0; i < 1; i++ {
+	for i := 0; i < l; i++ {
 		if fn.z[i] < 1 {
 			fn.z[fn.sizeI] = fn.c[i] * y[i] * (fn.z[i] - 1)
 			fn.i[fn.sizeI] = i
@@ -81,11 +81,11 @@ func (fn *L2RL2SvcFunc) subXTv(v []float64, xTv []float64) {
 	wSize := fn.getNrVariable()
 	x := fn.prob.X
 
-	for i := 0; i < wSize; i++ {
+	for i = 0; i < wSize; i++ {
 		xTv[i] = 0
 	}
 
-	for i := 0; i < fn.sizeI; i++ {
+	for i = 0; i < fn.sizeI; i++ {
 		SparseOperatorAxpy(v[i], x[fn.i[i]], xTv)
 	}
 }
@@ -95,11 +95,11 @@ func (fn *L2RL2SvcFunc) hv(s []float64, hs []float64) {
 	wSize := fn.getNrVariable()
 	x := fn.prob.X
 
-	for i := 0; i < wSize; i++ {
+	for i = 0; i < wSize; i++ {
 		hs[i] = 0
 	}
 
-	for i := 0; i < fn.sizeI; i++ {
+	for i = 0; i < fn.sizeI; i++ {
 		xi := x[fn.i[i]]
 		xTs := SparseOperatorDot(s, xi)
 		xTs = fn.c[fn.i[i]] * xTs

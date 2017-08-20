@@ -43,7 +43,7 @@ func (tr *Tron) tron(w []float64) {
 	s, r, g := make([]float64, n, n), make([]float64, n, n), make([]float64, n, n)
 
 	w0 := make([]float64, n, n)
-	for i := 0; i < n; i++ {
+	for i = 0; i < n; i++ {
 		w0[i] = 0
 	}
 	tr.funObj.fun(w0)
@@ -62,9 +62,10 @@ func (tr *Tron) tron(w []float64) {
 	iter = 1
 
 	wNew := make([]float64, n, n)
+	var reachBoundary bool
 
 	for iter <= tr.maxIter && search != 0 {
-		cgIter, reachBoundary := tr.trcg(delta, g, s, r)
+		cgIter, reachBoundary = tr.trcg(delta, g, s, r)
 
 		copy(wNew, w)
 		daxpy(one, s, wNew)
@@ -74,10 +75,10 @@ func (tr *Tron) tron(w []float64) {
 		fnew = tr.funObj.fun(wNew)
 
 		// Compute the actual reduction.
-		actred := f - fnew
+		actred = f - fnew
 
 		// On the first iteration, adjust the initial step bound.
-		snorm := euclideanNorm(s)
+		snorm = euclideanNorm(s)
 
 		if iter == 1 {
 			delta = math.Min(delta, snorm)
@@ -258,7 +259,7 @@ func euclideanNorm(vector []float64) float64 {
 			// try to get the best scaling factor
 			if scale < abs {
 				t := scale / abs
-				sum := 1 + sum*(t*t)
+				sum = 1 + sum*(t*t)
 				scale = abs
 			} else {
 				t := abs / scale

@@ -13,6 +13,65 @@ const (
 
 var random = rand.New(rand.NewSource(0))
 
+// Predict uses the model to predict the result based on the input features x
+func Predict(model *Model, x []Feature) float64 {
+	decValues := make([]float64, model.NumClass)
+	return predictValues(model, x, decValues)
+}
+
+func predictValues(model *Model, x []Feature, decValues []float64) float64 {
+	var n int
+	if model.Bias >= 0 {
+		n = model.NumFeatures + 1
+	} else {
+		n = model.NumFeatures
+	}
+
+	w := model.W
+
+	var nrW int
+	if model.NumClass == 2 && model.SolverType != MCSVM_CS {
+		nrW = 1
+	} else {
+		nrW = model.NumClass
+	}
+
+	for i := 0; i < nrW; i++ {
+		decValues[i] = 0
+	}
+
+	for _, lx := range x {
+		idx := lx.GetIndex()
+		// the dimension of testing data may exceed that of training
+		if idx <= n {
+			for i := 0; i < nrW; i++ {
+				decValues[i] += w[(idx-1)*nrW+1] * lx.GetValue()
+			}
+		}
+	}
+
+	if model.NumClass == 2 {
+		if model.SolverType.IsSupportVectorRegression() {
+			return decValues[0]
+		}
+		if decValues[0] > 0 {
+			return float64(model.Label[0])
+		}
+
+		return float64(model.Label[1])
+	}
+
+	var decMaxIdx int
+	for i := 1; i < model.NumClass; i++ {
+		if decValues[i] > decValues[decMaxIdx] {
+			decMaxIdx = i
+		}
+		return float64(model.Label[decMaxIdx])
+	}
+
+	return 0
+}
+
 // Train uses the Problem and Parameters to create a training model
 func Train(prob *Problem, param *Parameter) (*Model, error) {
 
@@ -42,7 +101,10 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 		model.NumFeatures = n
 	}
 
-	if param.solverType.SupportVectorRegression {
+	model.SolverType = param.solverType
+	model.Bias = prob.Bias
+
+	if param.solverType.IsSupportVectorRegression() {
 		model.W = make([]float64, wSize, wSize)
 		model.NumClass = 2
 		model.Label = nil
@@ -106,9 +168,69 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 					subProb.Y[j] = float64(i)
 				}
 			}
+
+			solver := NewSolverMCSVMCS(subProb, nrClass, weightedC, param.eps, 100000)
+			solver.solve(model.W)
+		} else {
+			if nrClass == 2 {
+				model.W = make([]float64, wSize)
+
+				e0 := start[0] - count[0]
+				k := 0
+				for ; k < e0; k++ {
+					subProb.Y[k] = 1
+				}
+
+				if param.initSol != nil {
+					for i := 0; i < wSize; i++ {
+						model.W[i] = param.initSol[i]
+					}
+				} else {
+					for i := 0; i < wSize; i++ {
+						model.W[i] = 0
+					}
+				}
+
+				trainOne(subProb, param, model.W, weightedC[0], weightedC[1])
+			} else {
+				model.W = make([]float64, wSize*nrClass)
+				w := make([]float64, wSize)
+				for i := 0; i < nrClass; i++ {
+					si := start[i]
+					ei := si + count[i]
+
+					k := 0
+					for ; k < si; k++ {
+						subProb.Y[k] = -1
+					}
+					for ; k < ei; k++ {
+						subProb.Y[k] = 1
+					}
+					for ; k < subProb.L; k++ {
+						subProb.Y[k] = -1
+					}
+
+					if param.initSol != nil {
+						for j := 0; j < wSize; j++ {
+							w[j] = param.initSol[j*nrClass+i]
+						}
+					} else {
+						for j := 0; j < wSize; j++ {
+							w[j] = 0
+						}
+					}
+
+					trainOne(subProb, param, w, weightedC[i], param.c)
+
+					for j := 0; j < n; j++ {
+						model.W[j*nrClass+i] = w[j]
+					}
+				}
+			}
 		}
 
 	}
+	return model, nil
 }
 
 func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float64) {
@@ -479,30 +601,43 @@ func solveL2RLRDual(prob *Problem, w []float64, eps float64, cp float64, cn floa
 				innerIter++
 			}
 
-			if innerIter > 0 {
+			if innerIter > 0 { //update w
 				alpha[ind1] = z
 				alpha[ind2] = C - z
 				SparseOperatorAxpy(float64(sign)*(z-alphaOld)*float64(yi), xi, w)
 			}
 		}
 
-		fmt.Printf("\noptimization finished, #iter = %d\n", iter)
-		if iter >= maxIters {
-			fmt.Printf("\nWARNING: reaching max nunber of iterations\nUsing -s 0 may be faster (also see FAQ)\n\n")
+		iter++
+		if iter%10 == 0 {
+			fmt.Print(".")
 		}
 
-		//calculate objective value
+		if GMax < eps {
+			break
+		}
 
-		var v float64
-		for i = 0; i < wSize; i++ {
-			v += w[i] * w[i]
+		if newtonIter <= 1/10 {
+			innerEps = math.Max(innerEpsMin, 0.1*innerEps)
 		}
-		v *= 0.5
-		for i = 0; i < l; i++ {
-			v += alpha[2*i]*math.Log(alpha[2*i]) + alpha[2*i+1]*math.Log(alpha[2*i+1]) - upperBound[GETI(y, i)]*math.Log(upperBound[GETI(y, i)])
-		}
-		fmt.Printf("Objective value = %g\n", v)
 	}
+
+	fmt.Printf("\noptimization finished, #iter = %d\n", iter)
+	if iter >= maxIters {
+		fmt.Printf("\nWARNING: reaching max nunber of iterations\nUsing -s 0 may be faster (also see FAQ)\n\n")
+	}
+
+	//calculate objective value
+
+	var v float64
+	for i = 0; i < wSize; i++ {
+		v += w[i] * w[i]
+	}
+	v *= 0.5
+	for i = 0; i < l; i++ {
+		v += alpha[2*i]*math.Log(alpha[2*i]) + alpha[2*i+1]*math.Log(alpha[2*i+1]) - upperBound[GETI(y, i)]*math.Log(upperBound[GETI(y, i)])
+	}
+	fmt.Printf("Objective value = %g\n", v)
 }
 
 func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float64, maxIters int) {
@@ -541,11 +676,11 @@ func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float
 	C := []float64{cn, 0, cp}
 
 	// Initial w can be set here
-	for j := 0; j < wSize; j++ {
+	for j = 0; j < wSize; j++ {
 		w[j] = 0
 	}
 
-	for j := 0; j < l; j++ {
+	for j = 0; j < l; j++ {
 		if probCol.Y[j] > 0 {
 			y[j] = 1
 		} else {
@@ -556,7 +691,7 @@ func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float
 	}
 
 	wNorm = 0
-	for j := 0; j < wSize; j++ {
+	for j = 0; j < wSize; j++ {
 		wNorm += math.Abs(w[j])
 		wpd[j] = w[j]
 		index[j] = j
@@ -571,7 +706,7 @@ func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float
 		}
 	}
 
-	for j := 0; j < 1; j++ {
+	for j = 0; j < 1; j++ {
 		expWtx[j] = math.Exp(expWtx[j])
 		tauTmp := 1 / (1 + expWtx[j])
 		tau[j] = C[GETI(y, j)] * tauTmp
@@ -583,7 +718,7 @@ func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float
 		GNorm1New = 0
 		activeSize = wSize
 
-		for s := 0; s < activeSize; s++ {
+		for s = 0; s < activeSize; s++ {
 			j = index[s]
 			HDiag[j] = nu
 			Grad[j] = 0
@@ -906,11 +1041,11 @@ func solveL1RL2Svc(probCol *Problem, w []float64, eps float64, cp float64, cn fl
 
 	C := []float64{cn, 0, cp}
 
-	for j := 0; j < wSize; j++ {
+	for j = 0; j < wSize; j++ {
 		w[j] = 0
 	}
 
-	for j := 0; j < l; j++ {
+	for j = 0; j < l; j++ {
 		b[j] = 1
 		if probCol.Y[j] > 0 {
 			y[j] = 1
@@ -919,7 +1054,7 @@ func solveL1RL2Svc(probCol *Problem, w []float64, eps float64, cp float64, cn fl
 		}
 	}
 
-	for j := 0; j < wSize; j++ {
+	for j = 0; j < wSize; j++ {
 		index[j] = j
 		xjSq[j] = 0
 		for _, xi := range probCol.X[j] {
@@ -936,13 +1071,13 @@ func solveL1RL2Svc(probCol *Problem, w []float64, eps float64, cp float64, cn fl
 		GMaxNew = 0
 		GNorm1New = 0
 
-		for j := 0; j < activeSize; j++ {
+		for j = 0; j < activeSize; j++ {
 			i := j + random.Intn(activeSize-j)
 			swapIntArray(index, i, j)
 		}
 
-		for s := 0; s < activeSize; s++ {
-			j := index[s]
+		for s = 0; s < activeSize; s++ {
+			j = index[s]
 			GLoss = 0
 			H = 0
 
@@ -1146,7 +1281,7 @@ func solveL2RL1L2Svc(prob *Problem, w []float64, eps float64, cp float64, cn flo
 		upperBound[2] = cp
 	}
 
-	for i := 0; i < l; i++ {
+	for i = 0; i < l; i++ {
 		if prob.Y[i] > 0 {
 			y[i] = 1
 		} else {
@@ -1156,15 +1291,15 @@ func solveL2RL1L2Svc(prob *Problem, w []float64, eps float64, cp float64, cn flo
 
 	// Initial alpha can be set here. Note that
 	// 0 <= alpha[i] <= upper_bound[GETI(i)]
-	for i := 0; i < l; i++ {
+	for i = 0; i < l; i++ {
 		alpha[i] = 0
 	}
 
-	for i := 0; i < wSize; i++ {
+	for i = 0; i < wSize; i++ {
 		w[i] = 0
 	}
 
-	for i := 0; i < l; i++ {
+	for i = 0; i < l; i++ {
 		QD[i] = diag[GETI(y, i)]
 		xi := prob.X[i]
 		QD[i] += SparseOperatorNrm2Sq(xi)
@@ -1176,12 +1311,12 @@ func solveL2RL1L2Svc(prob *Problem, w []float64, eps float64, cp float64, cn flo
 		PGMaxNew = math.Inf(-1)
 		PGMinNew = math.Inf(1)
 
-		for i := 0; i < activeSize; i++ {
+		for i = 0; i < activeSize; i++ {
 			j := i + random.Intn(activeSize-1)
 			swapIntArray(index, i, j)
 		}
 
-		for s := 0; s < activeSize; s++ {
+		for s = 0; s < activeSize; s++ {
 			i = index[s]
 			yi := y[i]
 			xi := prob.X[i]
