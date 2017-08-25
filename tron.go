@@ -40,9 +40,9 @@ func (tr *Tron) tron(w []float64) {
 	var alpha, f, fnew, prered, actred, gs float64
 	var search, iter int = 1, 1
 
-	s, r, g := make([]float64, n, n), make([]float64, n, n), make([]float64, n, n)
+	s, r, g := make([]float64, n), make([]float64, n), make([]float64, n)
 
-	w0 := make([]float64, n, n)
+	w0 := make([]float64, n)
 	for i = 0; i < n; i++ {
 		w0[i] = 0
 	}
@@ -61,7 +61,7 @@ func (tr *Tron) tron(w []float64) {
 
 	iter = 1
 
-	wNew := make([]float64, n, n)
+	wNew := make([]float64, n)
 	var reachBoundary bool
 
 	for iter <= tr.maxIter && search != 0 {
@@ -122,14 +122,17 @@ func (tr *Tron) tron(w []float64) {
 
 		if f < -1.0e+32 {
 			log.Println("WARNING: f < -1.0e+32")
+			break
 		}
 
 		if prered <= 0 {
 			log.Println("WARNING: prered <= 0")
+			break
 		}
 
 		if math.Abs(actred) <= 1.0e-12*math.Abs(f) && math.Abs(prered) <= 1.0e-12*math.Abs(f) {
 			log.Println("WARNING: actred and prered too small")
+			break
 		}
 	}
 
@@ -140,8 +143,8 @@ func (tr *Tron) trcg(delta float64, g []float64, s []float64, r []float64) (int,
 	n := tr.funObj.getNrVariable()
 	var one float64 = 1
 
-	var d = make([]float64, n, n)
-	var hd = make([]float64, n, n)
+	var d = make([]float64, n)
+	var hd = make([]float64, n)
 	var rTr, rNewTrNew, cgTol float64
 
 	var reachBoundary = false
@@ -180,8 +183,8 @@ func (tr *Tron) trcg(delta float64, g []float64, s []float64, r []float64) (int,
 			sts := dot(s, s)
 			dtd := dot(d, d)
 			dsq := delta * delta
-
 			rad := math.Sqrt(std*std + dtd*(dsq-sts))
+
 			if std >= 0 {
 				alpha = (dsq - sts) / (std + rad)
 			} else {
@@ -196,11 +199,9 @@ func (tr *Tron) trcg(delta float64, g []float64, s []float64, r []float64) (int,
 
 		alpha = -alpha
 		daxpy(alpha, hd, r)
-
 		rNewTrNew = dot(r, r)
 		beta := rNewTrNew / rTr
 		scale(beta, d)
-
 		daxpy(one, r, d)
 		rTr = rNewTrNew
 	}

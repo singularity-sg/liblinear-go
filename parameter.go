@@ -12,7 +12,8 @@ type Parameter struct {
 	initSol     []float64
 }
 
-func newParameter(solverType *SolverType, c float64, eps float64, maxIters int, p float64) *Parameter {
+// NewParameter constructs a Parameter
+func NewParameter(solverType *SolverType, c float64, eps float64, maxIters int, p float64) *Parameter {
 	parameter := &Parameter{
 		solverType: solverType,
 		c:          c,
@@ -24,7 +25,8 @@ func newParameter(solverType *SolverType, c float64, eps float64, maxIters int, 
 	return parameter
 }
 
-func (p *Parameter) getNumWeights() int {
+// GetNumWeights gets the weights
+func (p *Parameter) GetNumWeights() int {
 	if p.weight == nil {
 		return 0
 	}

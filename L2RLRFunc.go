@@ -15,6 +15,8 @@ func NewL2RLRFunc(prob *Problem, c []float64) *L2RLRFunc {
 	return &L2RLRFunc{
 		prob: prob,
 		c:    c,
+		z:    make([]float64, prob.L),
+		d:    make([]float64, prob.L),
 	}
 }
 
@@ -86,15 +88,16 @@ func (fn *L2RLRFunc) xTv(v []float64, xTv []float64) {
 }
 
 func (fn *L2RLRFunc) hv(s []float64, hs []float64) {
+	var i int
 	l := fn.prob.L
 	wSize := fn.getNrVariable()
 	x := fn.prob.X
 
-	for i := 0; i < wSize; i++ {
+	for i = 0; i < wSize; i++ {
 		hs[i] = 0
 	}
 
-	for i := 0; i < l; i++ {
+	for i = 0; i < l; i++ {
 		xi := x[i]
 		xTs := SparseOperatorDot(s, xi)
 
@@ -103,7 +106,7 @@ func (fn *L2RLRFunc) hv(s []float64, hs []float64) {
 		SparseOperatorAxpy(xTs, xi, hs)
 	}
 
-	for i := 0; i < wSize; i++ {
+	for i = 0; i < wSize; i++ {
 		hs[i] = s[i] + hs[i]
 	}
 }

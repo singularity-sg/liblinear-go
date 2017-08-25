@@ -1,7 +1,6 @@
 package liblinear
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -45,7 +44,7 @@ func predictValues(model *Model, x []Feature, decValues []float64) float64 {
 		// the dimension of testing data may exceed that of training
 		if idx <= n {
 			for i := 0; i < nrW; i++ {
-				decValues[i] += w[(idx-1)*nrW+1] * lx.GetValue()
+				decValues[i] += w[(idx-1)*nrW+i] * lx.GetValue()
 			}
 		}
 	}
@@ -66,10 +65,55 @@ func predictValues(model *Model, x []Feature, decValues []float64) float64 {
 		if decValues[i] > decValues[decMaxIdx] {
 			decMaxIdx = i
 		}
-		return float64(model.Label[decMaxIdx])
 	}
 
-	return 0
+	return float64(model.Label[decMaxIdx])
+}
+
+//PredictProbability gives the probability estimates of each class given the features
+func PredictProbability(model *Model, x []Feature, probEstimates []float64) float64 {
+	if !model.isProbabilityModel() {
+		sb := "probability output is only supported for logistic regression"
+		sb = sb + ". This is currently only supported by the following solvers: "
+		var i int
+		for _, solverType := range SolverTypeValues() {
+			if solverType.IsLogisticRegressionSolver() {
+				if i > 0 {
+					sb = sb + ", "
+				}
+				i++
+				sb = sb + solverType.Name()
+			}
+		}
+		panic(sb)
+	}
+	nrClass := model.NumClass
+	var nrW int
+	if nrClass == 2 {
+		nrW = 1
+	} else {
+		nrW = nrClass
+	}
+
+	label := predictValues(model, x, probEstimates)
+	for i := 0; i < nrW; i++ {
+		probEstimates[i] = 1 / (1 + math.Exp(-probEstimates[i]))
+	}
+
+	if nrClass == 2 { // for binary classification
+		probEstimates[1] = 1. - probEstimates[0]
+	} else {
+		var sum float64
+		for i := 0; i < nrClass; i++ {
+			sum += probEstimates[i]
+		}
+
+		for i := 0; i < nrClass; i++ {
+			probEstimates[i] = probEstimates[i] / sum
+		}
+	}
+
+	return label
 }
 
 // Train uses the Problem and Parameters to create a training model
@@ -79,14 +123,14 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 		indexBefore := 0
 		for _, n := range nodes {
 			if n.GetIndex() <= indexBefore {
-				return nil, errors.New("feature nodes must be sorted by index in ascending order")
+				panic("feature nodes must be sorted by index in ascending order")
 			}
 			indexBefore = n.GetIndex()
 		}
 	}
 
-	if param.solverType != L2R_LR && param.solverType != L2R_L2LOSS_SVC {
-		return nil, errors.New("Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC")
+	if param.initSol != nil && param.solverType.Name() != L2R_LR.Name() && param.solverType.Name() != L2R_L2LOSS_SVC.Name() {
+		panic("Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC")
 	}
 
 	l := prob.L
@@ -105,7 +149,7 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 	model.Bias = prob.Bias
 
 	if param.solverType.IsSupportVectorRegression() {
-		model.W = make([]float64, wSize, wSize)
+		model.W = make([]float64, wSize)
 		model.NumClass = 2
 		model.Label = nil
 
@@ -135,7 +179,7 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 		for i := 0; i < nrClass; i++ {
 			weightedC[i] = param.c
 		}
-		for i := 0; i < param.getNumWeights(); i++ {
+		for i := 0; i < param.GetNumWeights(); i++ {
 			var j int
 			for j = 0; j < nrClass; j++ {
 				if param.weightLabel[i] == label[j] {
@@ -179,6 +223,9 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 				k := 0
 				for ; k < e0; k++ {
 					subProb.Y[k] = 1
+				}
+				for ; k < subProb.L; k++ {
+					subProb.Y[k] = -1
 				}
 
 				if param.initSol != nil {
@@ -1260,11 +1307,11 @@ func solveL2RL1L2Svc(prob *Problem, w []float64, eps float64, cp float64, cn flo
 	wSize := prob.N
 	var i, s, iter int
 	var C, d, G float64
-	QD := make([]float64, l, l)
-	index := make([]int, l, l)
-	alpha := make([]float64, l, l)
-	y := make([]int8, l, l)
-	activeSize := 1
+	QD := make([]float64, l)
+	index := make([]int, l)
+	alpha := make([]float64, l)
+	y := make([]int8, l)
+	activeSize := l
 
 	// PG: projected gradient, for shrinking and stopping
 	var PG float64
@@ -1272,8 +1319,9 @@ func solveL2RL1L2Svc(prob *Problem, w []float64, eps float64, cp float64, cn flo
 	var PGMinOld = math.Inf(-1)
 	var PGMaxNew, PGMinNew float64
 
-	diag := []float64{0.5 / cn, 0.5 / cp}
-	upperBound := []float64{math.Inf(1), math.Inf(1)}
+	// default solverType: L2R_L2LOSS_SVC_DUAL
+	diag := []float64{0.5 / cn, 0, 0.5 / cp}
+	upperBound := []float64{math.Inf(1), 0, math.Inf(1)}
 	if solverType == L2R_L1LOSS_SVC_DUAL {
 		diag[0] = 0
 		diag[2] = 0
@@ -1312,7 +1360,7 @@ func solveL2RL1L2Svc(prob *Problem, w []float64, eps float64, cp float64, cn flo
 		PGMinNew = math.Inf(1)
 
 		for i = 0; i < activeSize; i++ {
-			j := i + random.Intn(activeSize-1)
+			j := i + random.Intn(activeSize-i)
 			swapIntArray(index, i, j)
 		}
 
@@ -1370,7 +1418,7 @@ func solveL2RL1L2Svc(prob *Problem, w []float64, eps float64, cp float64, cn flo
 				break
 			} else {
 				activeSize = l
-				fmt.Print(".")
+				fmt.Print("*")
 				PGMaxOld = math.Inf(1)
 				PGMaxOld = math.Inf(-1)
 				continue
@@ -1394,12 +1442,14 @@ func solveL2RL1L2Svc(prob *Problem, w []float64, eps float64, cp float64, cn flo
 		fmt.Printf("\nWARNING: reaching max number of iterations\nUsing -s 2 may be faster (also see FAQ)\n\n")
 	}
 
+	// calculate objective value
+
 	var v float64
 	nSV := 0
-	for i := 0; i < wSize; i++ {
+	for i = 0; i < wSize; i++ {
 		v += w[i] * w[i]
 	}
-	for i := 0; i < l; i++ {
+	for i = 0; i < l; i++ {
 		v += alpha[i] * (alpha[i]*diag[GETI(y, i)] - 2)
 		if alpha[i] > 0 {
 			nSV++

@@ -14,6 +14,8 @@ func NewL2RL2SvcFunc(prob *Problem, c []float64) *L2RL2SvcFunc {
 	return &L2RL2SvcFunc{
 		prob: prob,
 		c:    c,
+		z:    make([]float64, prob.L),
+		i:    make([]int, prob.L),
 	}
 }
 
@@ -33,7 +35,7 @@ func (fn *L2RL2SvcFunc) xv(v []float64, xv []float64) {
 func (fn *L2RL2SvcFunc) fun(w []float64) float64 {
 	var i int
 	var f float64
-	var y []float64
+	var y = fn.prob.Y
 	var l = fn.prob.L
 	var wSize = fn.getNrVariable()
 

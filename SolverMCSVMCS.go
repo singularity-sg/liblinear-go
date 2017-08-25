@@ -79,7 +79,7 @@ func (solver *SolverMCSVMCS) beShrunk(i int, m int, yi int, alphaI float64, minG
 func (solver *SolverMCSVMCS) solveSubProblem(Ai float64, yi int, Cyi float64, activeI int, alphaNew []float64) {
 	var r int
 
-	if activeI <= len(solver.B) {
+	if activeI > len(solver.B) {
 		panic("unable to solver subproblem")
 	}
 
@@ -111,14 +111,13 @@ func (solver *SolverMCSVMCS) solveSubProblem(Ai float64, yi int, Cyi float64, ac
 func (solver *SolverMCSVMCS) solve(w []float64) {
 	var i, m, s int
 	var iter int
-	var maxIter = solver.maxIter
 	var l, nrClass = solver.l, solver.nrClass
 	var eps, wSize = solver.eps, solver.wSize
 	alpha := make([]float64, l*nrClass)
 	alphaNew := make([]float64, nrClass)
 	index := make([]int, l)
 	QD := make([]float64, l)
-	dInd := make([]int, l)
+	dInd := make([]int, nrClass)
 	dVal := make([]float64, nrClass)
 	alphaIndex := make([]int, nrClass*l)
 	yIndex := make([]int, l)
@@ -164,7 +163,7 @@ func (solver *SolverMCSVMCS) solve(w []float64) {
 	alphaI := NewDoubleArrayPointer(alpha, 0)
 	alphaIndexI := NewIntArrayPointer(alphaIndex, 0)
 
-	for iter < maxIter {
+	for iter < solver.maxIter {
 		stopping := math.Inf(-1)
 		for i = 0; i < activeSize; i++ {
 			j := i + random.Intn(activeSize-i)
@@ -178,7 +177,7 @@ func (solver *SolverMCSVMCS) solve(w []float64) {
 			alphaIndexI.setOffset(i * nrClass)
 
 			if aI > 0 {
-				for m = 0; m < activeSize; m++ {
+				for m = 0; m < activeSizeI[i]; m++ {
 					solver.G[m] = 1
 				}
 				if yIndex[i] < activeSizeI[i] {
@@ -293,7 +292,7 @@ func (solver *SolverMCSVMCS) solve(w []float64) {
 	}
 
 	fmt.Printf("\noptimization finished, #iter = %d\n", iter)
-	if iter >= maxIter {
+	if iter >= solver.maxIter {
 		fmt.Printf("\nWARNING: reaching max number of iterations\n")
 	}
 
