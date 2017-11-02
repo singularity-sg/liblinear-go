@@ -1,8 +1,9 @@
 package liblinear
 
 import (
-	"log"
 	"math"
+
+	"github.com/tevino/abool"
 )
 
 // Tron is Trust Region Newton Method optimization
@@ -62,10 +63,10 @@ func (tr *Tron) tron(w []float64) {
 	iter = 1
 
 	wNew := make([]float64, n)
-	var reachBoundary bool
+	var reachBoundary = abool.New()
 
 	for iter <= tr.maxIter && search != 0 {
-		cgIter, reachBoundary = tr.trcg(delta, g, s, r)
+		cgIter = tr.trcg(delta, g, s, r, reachBoundary)
 
 		copy(wNew, w)
 		daxpy(one, s, wNew)
@@ -88,7 +89,7 @@ func (tr *Tron) tron(w []float64) {
 		if fnew-f-gs <= 0 {
 			alpha = sigma3
 		} else {
-			alpha = math.Max(sigma1, -0.5*(gs/fnew-f-gs))
+			alpha = math.Max(sigma1, -0.5*(gs/(fnew-f-gs)))
 		}
 
 		// Update the trust region bound according to the ratio of actual to
@@ -100,14 +101,14 @@ func (tr *Tron) tron(w []float64) {
 		} else if actred < eta2*prered {
 			delta = math.Max(sigma1*delta, math.Min(alpha*snorm, sigma3*delta))
 		} else {
-			if reachBoundary {
+			if reachBoundary.IsSet() {
 				delta = sigma3 * delta
 			} else {
 				delta = math.Max(delta, math.Min(alpha*snorm, sigma3*delta))
 			}
 		}
 
-		log.Printf("iter %2d act %5.3e pre %5.3e delta %5.3e f %5.3e |g| %5.3e CG %3d\n", iter, actred, prered, delta, f, gnorm, cgIter)
+		logger.Printf("iter %2d act %5.3e pre %5.3e delta %5.3e f %5.3e |g| %5.3e CG %3d\n", iter, actred, prered, delta, f, gnorm, cgIter)
 
 		if actred > eta0*prered {
 			iter++
@@ -121,24 +122,24 @@ func (tr *Tron) tron(w []float64) {
 		}
 
 		if f < -1.0e+32 {
-			log.Println("WARNING: f < -1.0e+32")
+			logger.Println("WARNING: f < -1.0e+32")
 			break
 		}
 
 		if prered <= 0 {
-			log.Println("WARNING: prered <= 0")
+			logger.Println("WARNING: prered <= 0")
 			break
 		}
 
 		if math.Abs(actred) <= 1.0e-12*math.Abs(f) && math.Abs(prered) <= 1.0e-12*math.Abs(f) {
-			log.Println("WARNING: actred and prered too small")
+			logger.Println("WARNING: actred and prered too small")
 			break
 		}
 	}
 
 }
 
-func (tr *Tron) trcg(delta float64, g []float64, s []float64, r []float64) (int, bool) {
+func (tr *Tron) trcg(delta float64, g []float64, s []float64, r []float64, reachBoundary *abool.AtomicBool) int {
 
 	n := tr.funObj.getNrVariable()
 	var one float64 = 1
@@ -146,8 +147,6 @@ func (tr *Tron) trcg(delta float64, g []float64, s []float64, r []float64) (int,
 	var d = make([]float64, n)
 	var hd = make([]float64, n)
 	var rTr, rNewTrNew, cgTol float64
-
-	var reachBoundary = false
 
 	for i := 0; i < n; i++ {
 		s[i] = 0
@@ -173,9 +172,8 @@ func (tr *Tron) trcg(delta float64, g []float64, s []float64, r []float64) (int,
 		daxpy(alpha, d, s)
 
 		if euclideanNorm(s) > delta {
-			log.Println("cg reaches trust region boundary")
-			reachBoundary = true
-
+			logger.Println("cg reaches trust region boundary")
+			reachBoundary.Set()
 			alpha = -alpha
 			daxpy(alpha, d, s)
 
@@ -206,7 +204,7 @@ func (tr *Tron) trcg(delta float64, g []float64, s []float64, r []float64) (int,
 		rTr = rNewTrNew
 	}
 
-	return cgIter, reachBoundary
+	return cgIter
 }
 
 // constant times a vector plus a vector

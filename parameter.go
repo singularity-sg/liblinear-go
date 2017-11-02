@@ -13,7 +13,7 @@ type Parameter struct {
 }
 
 // NewParameter constructs a Parameter
-func NewParameter(solverType *SolverType, c float64, eps float64, maxIters int, p float64) *Parameter {
+func NewParameter(solverType *SolverType, c float64, eps float64, p float64, maxIters int) *Parameter {
 	parameter := &Parameter{
 		solverType: solverType,
 		c:          c,

@@ -2,15 +2,72 @@ package liblinear
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
+	"os"
 )
 
 const (
 	version int = 211
 )
 
+var logger = log.New(os.Stdout, "[liblinear] ", log.LstdFlags)
+
 var random = rand.New(rand.NewSource(0))
+
+// CrossValidation uses n-fold method to verify model
+func CrossValidation(prob *Problem, param *Parameter, nrFold int, target []float64) {
+	var i int
+	var l = prob.L
+	var perm = make([]int, l)
+
+	if nrFold > l {
+		nrFold = l
+		logger.Println("WARNING: # folds > # data. Will use # folds = # data instead (i.e., leave-one-out cross validation)")
+	}
+	var foldStart = make([]int, nrFold+1)
+
+	for i = 0; i < l; i++ {
+		perm[i] = i
+	}
+
+	for i = 0; i < l; i++ {
+		j := i + random.Intn(l-i)
+		swapIntArray(perm, i, j)
+	}
+
+	for i = 0; i < nrFold; i++ {
+		foldStart[i] = i * l / nrFold
+	}
+
+	for i = 0; i < nrFold; i++ {
+		begin := foldStart[i]
+		end := foldStart[i+1]
+		var j, k int
+		tempL := l - (end - begin)
+		subProb := NewProblem(tempL, prob.N, make([]float64, tempL), make([][]Feature, tempL), prob.Bias)
+
+		k = 0
+		for j = 0; j < begin; j++ {
+			subProb.X[k] = prob.X[perm[j]]
+			subProb.Y[k] = prob.Y[perm[j]]
+			k++
+		}
+
+		for j = end; j < l; j++ {
+			subProb.X[k] = prob.X[perm[j]]
+			subProb.Y[k] = prob.Y[perm[j]]
+			k++
+		}
+
+		if subModel, err := Train(subProb, param); err == nil {
+			for j = begin; j < end; j++ {
+				target[perm[j]] = Predict(subModel, prob.X[perm[j]])
+			}
+		}
+	}
+}
 
 // Predict uses the model to predict the result based on the input features x
 func Predict(model *Model, x []Feature) float64 {
@@ -219,7 +276,7 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 			if nrClass == 2 {
 				model.W = make([]float64, wSize)
 
-				e0 := start[0] - count[0]
+				e0 := start[0] + count[0]
 				k := 0
 				for ; k < e0; k++ {
 					subProb.Y[k] = 1
@@ -337,7 +394,7 @@ func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float
 		solveL1RL2Svc(probCol, w, primalSolverTol, cp, cn, param.maxIters)
 	case L1R_LR:
 		probCol := transpose(prob)
-		solveL1RLR(probCol, w, eps, cp, cn, param.maxIters)
+		solveL1RLR(probCol, w, primalSolverTol, cp, cn, param.maxIters)
 	case L2R_LR_DUAL:
 		solveL2RLRDual(prob, w, eps, cp, cn, param.maxIters)
 	case L2R_L2LOSS_SVR:
@@ -507,9 +564,9 @@ func solveL2RL1L2Svr(prob *Problem, w []float64, param *Parameter) {
 		GMaxOld = GMaxNew
 	}
 
-	fmt.Printf("\noptimization finished, #iter = %d\n", iter)
+	logger.Printf("\n[solveL2RL1L2Svr] optimization finished, #iter = %d\n", iter)
 	if iter >= maxIter {
-		fmt.Printf("\nWARNING: reaching max number of iterations\nUsing -s 11 may be faster\n\n")
+		logger.Printf("\n[solveL2RL1L2Svr]WARNING: reaching max number of iterations\nUsing -s 11 may be faster\n\n")
 	}
 
 	// calculate objective value
@@ -526,8 +583,8 @@ func solveL2RL1L2Svr(prob *Problem, w []float64, param *Parameter) {
 		}
 	}
 
-	fmt.Printf("Objective value = %g\n", v)
-	fmt.Printf("nSV = %d\n", nSV)
+	logger.Printf("[solveL2RL1L2Svr] Objective value = %g\n", v)
+	logger.Printf("[solveL2RL1L2Svr] nSV = %d\n", nSV)
 }
 
 /**
@@ -664,14 +721,14 @@ func solveL2RLRDual(prob *Problem, w []float64, eps float64, cp float64, cn floa
 			break
 		}
 
-		if newtonIter <= 1/10 {
+		if newtonIter <= l/10 {
 			innerEps = math.Max(innerEpsMin, 0.1*innerEps)
 		}
 	}
 
-	fmt.Printf("\noptimization finished, #iter = %d\n", iter)
+	logger.Printf("\n[solveL2RLRDual] optimization finished, #iter = %d\n", iter)
 	if iter >= maxIters {
-		fmt.Printf("\nWARNING: reaching max nunber of iterations\nUsing -s 0 may be faster (also see FAQ)\n\n")
+		logger.Printf("\n[solveL2RLRDual] WARNING: reaching max nunber of iterations\nUsing -s 0 may be faster (also see FAQ)\n\n")
 	}
 
 	//calculate objective value
@@ -684,7 +741,7 @@ func solveL2RLRDual(prob *Problem, w []float64, eps float64, cp float64, cn floa
 	for i = 0; i < l; i++ {
 		v += alpha[2*i]*math.Log(alpha[2*i]) + alpha[2*i+1]*math.Log(alpha[2*i+1]) - upperBound[GETI(y, i)]*math.Log(upperBound[GETI(y, i)])
 	}
-	fmt.Printf("Objective value = %g\n", v)
+	logger.Printf("[solveL2RLRDual] Objective value = %g\n", v)
 }
 
 func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float64, maxIters int) {
@@ -753,7 +810,7 @@ func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float
 		}
 	}
 
-	for j = 0; j < 1; j++ {
+	for j = 0; j < l; j++ {
 		expWtx[j] = math.Exp(expWtx[j])
 		tauTmp := 1 / (1 + expWtx[j])
 		tau[j] = C[GETI(y, j)] * tauTmp
@@ -825,12 +882,12 @@ func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float
 			QPGMaxNew = 0
 			QPGNorm1New = 0
 
-			for j := 0; j < QPActiveSize; j++ {
+			for j = 0; j < QPActiveSize; j++ {
 				i := random.Intn(QPActiveSize - j)
 				swapIntArray(index, i, j)
 			}
 
-			for s := 0; s < QPActiveSize; s++ {
+			for s = 0; s < QPActiveSize; s++ {
 				j = index[s]
 				H = HDiag[j]
 
@@ -904,7 +961,7 @@ func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float
 		}
 
 		if iter >= maxIters {
-			fmt.Print("WARNING: reaching max number of inner iterations\n")
+			logger.Print("[solveL1RLR] WARNING: reaching max number of inner iterations\n")
 		}
 
 		delta = 0
@@ -920,14 +977,6 @@ func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float
 		negsumXtd = 0
 		for i := 0; i < l; i++ {
 			if y[i] == -1 {
-				wNormNew += math.Abs(wpd[j])
-			}
-		}
-		delta += wNormNew - wNorm
-
-		negsumXtd = 0
-		for i := 0; i < 1; i++ {
-			if y[i] == -1 {
 				negsumXtd += C[GETI(y, i)] * xTd[i]
 			}
 		}
@@ -940,11 +989,11 @@ func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float
 			for i := 0; i < l; i++ {
 				expXtd := math.Exp(xTd[i])
 				expWtxNew[i] = expWtx[i] * expXtd
-				cond += C[GETI(y, i)]*math.Log(1+expWtxNew[i])/expXtd + expWtxNew[i]
+				cond += C[GETI(y, i)] * math.Log((1+expWtxNew[i])/(expXtd+expWtxNew[i]))
 			}
 			if cond <= 0 {
 				wNorm = wNormNew
-				for j := 0; j < wSize; j++ {
+				for j = 0; j < wSize; j++ {
 					w[j] = wpd[j]
 				}
 
@@ -954,11 +1003,10 @@ func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float
 					tau[i] = C[GETI(y, i)] * tauTmp
 					D[i] = C[GETI(y, i)] * expWtx[i] * tauTmp * tauTmp
 				}
-
 				break
 			} else {
 				wNormNew = 0
-				for j := 0; j < wSize; j++ {
+				for j = 0; j < wSize; j++ {
 					wpd[j] = (w[j] + wpd[j]) * 0.5
 					if wpd[j] != 0 {
 						wNormNew += math.Abs(wpd[j])
@@ -970,65 +1018,64 @@ func solveL1RLR(probCol *Problem, w []float64, eps float64, cp float64, cn float
 					xTd[i] *= 0.5
 				}
 			}
+		}
 
-			// Recompute some info due to too many line search steps
-			if numLineSearch >= maxNumLineSearch {
-				for i := 0; i < l; i++ {
-					expWtx[i] = 0
+		// Recompute some info due to too many line search steps
+		if numLineSearch >= maxNumLineSearch {
+			for i := 0; i < l; i++ {
+				expWtx[i] = 0
+			}
+
+			for i := 0; i < wSize; i++ {
+				if w[i] == 0 {
+					continue
 				}
-
-				for i := 0; i < wSize; i++ {
-					if w[i] == 0 {
-						continue
-					}
-					x := probCol.X[i]
-					SparseOperatorAxpy(w[i], x, expWtx)
-				}
-
-				for i := 0; i < l; i++ {
-					expWtx[i] = math.Exp(expWtx[i])
-				}
+				x := probCol.X[i]
+				SparseOperatorAxpy(w[i], x, expWtx)
 			}
 
-			if iter == 1 {
-				innerEps *= 0.25
-			}
-
-			newtonIter++
-			GMaxOld = GMaxNew
-
-			fmt.Printf("iter %3d #CD cycles %d\n", newtonIter, iter)
-		}
-
-		fmt.Println("===============================")
-		fmt.Printf("optimization finished, #iter = %d\n", newtonIter)
-		if newtonIter >= maxNewtonIter {
-			fmt.Println("WARNING: reaching max number of iterations")
-		}
-
-		// calculate objective value
-		var v float64
-		var nnz int
-
-		for j := 0; j < wSize; j++ {
-			if w[j] != 0 {
-				v += math.Abs(w[j])
-				nnz++
+			for i := 0; i < l; i++ {
+				expWtx[i] = math.Exp(expWtx[i])
 			}
 		}
 
-		for j := 0; j < l; j++ {
-			if y[j] == 1 {
-				v += C[GETI(y, j)] * math.Log(1+1/expWtx[j])
-			} else {
-				v += C[GETI(y, j)] * math.Log(1+expWtx[j])
-			}
+		if iter == 1 {
+			innerEps *= 0.25
 		}
 
-		fmt.Printf("Objective value = %g\n", v)
-		fmt.Printf("#nonzeros/#features = %d/%d\n", nnz, wSize)
+		newtonIter++
+		GMaxOld = GMaxNew
 
+		logger.Printf("[solveL1RLR] iter %3d #CD cycles %d\n", newtonIter, iter)
 	}
+
+	logger.Println("===============================")
+	logger.Printf("[solveL1RLR] optimization finished, #iter = %d\n", newtonIter)
+	if newtonIter >= maxNewtonIter {
+		logger.Println("WARNING: reaching max number of iterations")
+	}
+
+	// calculate objective value
+	var v float64
+	var nnz int
+
+	for j = 0; j < wSize; j++ {
+		if w[j] != 0 {
+			v += math.Abs(w[j])
+			nnz++
+		}
+	}
+
+	for j = 0; j < l; j++ {
+		if y[j] == 1 {
+			v += C[GETI(y, j)] * math.Log(1+1/expWtx[j])
+		} else {
+			v += C[GETI(y, j)] * math.Log(1+expWtx[j])
+		}
+	}
+
+	logger.Printf("[solveL1RLR] Objective value = %g\n", v)
+	logger.Printf("[solveL1RLR] #nonzeros/#features = %d/%d\n", nnz, wSize)
 
 }
 
@@ -1036,8 +1083,8 @@ func transpose(prob *Problem) *Problem {
 	l := prob.L
 	n := prob.N
 
-	colPtr := make([]int, n+1, n+1)
-	probCol := NewProblem(l, n, make([]float64, l, l), make([][]Feature, n, n), prob.Bias)
+	colPtr := make([]int, n+1)
+	probCol := NewProblem(l, n, make([]float64, l), make([][]Feature, n), prob.Bias)
 
 	for i := 0; i < l; i++ {
 		probCol.Y[i] = prob.Y[i]
@@ -1273,9 +1320,9 @@ func solveL1RL2Svc(probCol *Problem, w []float64, eps float64, cp float64, cn fl
 		GMaxOld = GMaxNew
 	}
 
-	fmt.Printf("\noptimization finished, #iter = %d\n", iter)
+	logger.Printf("\n[solveL1RL2Svcoptimization finished, #iter = %d\n", iter)
 	if iter >= maxIter {
-		fmt.Printf("\nWARNING: reaching max number of iterations\n")
+		logger.Printf("\n[solveL1RL2Svc] WARNING: reaching max number of iterations\n")
 	}
 
 	//calculate objective value
@@ -1297,8 +1344,8 @@ func solveL1RL2Svc(probCol *Problem, w []float64, eps float64, cp float64, cn fl
 		}
 	}
 
-	fmt.Printf("Objective value = %g\n", v)
-	fmt.Printf("#nonzeros/#features = %d/%d\n", nnz, wSize)
+	logger.Printf("[solveL1RL2Svc] Objective value = %g\n", v)
+	logger.Printf("[solveL1RL2Svc] #nonzeros/#features = %d/%d\n", nnz, wSize)
 
 }
 
@@ -1436,10 +1483,10 @@ func solveL2RL1L2Svc(prob *Problem, w []float64, eps float64, cp float64, cn flo
 
 	}
 
-	fmt.Printf("\noptimization finished, #iter = %d\n", iter)
+	logger.Printf("\n[solveL1RL2Svc] optimization finished, #iter = %d\n", iter)
 
 	if iter >= maxIter {
-		fmt.Printf("\nWARNING: reaching max number of iterations\nUsing -s 2 may be faster (also see FAQ)\n\n")
+		logger.Printf("\n[solveL1RL2Svc] WARNING: reaching max number of iterations\nUsing -s 2 may be faster (also see FAQ)\n\n")
 	}
 
 	// calculate objective value
@@ -1455,8 +1502,8 @@ func solveL2RL1L2Svc(prob *Problem, w []float64, eps float64, cp float64, cn flo
 			nSV++
 		}
 	}
-	fmt.Printf("Objective value = %g\n", v/2)
-	fmt.Printf("nSV = %d\n", nSV)
+	logger.Printf("[solveL1RL2Svc] Objective value = %g\n", v/2)
+	logger.Printf("[solveL1RL2Svc] nSV = %d\n", nSV)
 }
 
 func swapIntArray(array []int, idxA int, idxB int) {

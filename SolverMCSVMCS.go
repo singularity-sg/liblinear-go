@@ -291,9 +291,9 @@ func (solver *SolverMCSVMCS) solve(w []float64) {
 		}
 	}
 
-	fmt.Printf("\noptimization finished, #iter = %d\n", iter)
+	logger.Printf("\noptimization finished, #iter = %d\n", iter)
 	if iter >= solver.maxIter {
-		fmt.Printf("\nWARNING: reaching max number of iterations\n")
+		logger.Printf("\nWARNING: reaching max number of iterations\n")
 	}
 
 	// calculate objective value
@@ -313,6 +313,6 @@ func (solver *SolverMCSVMCS) solve(w []float64) {
 	for i = 0; i < l; i++ {
 		v -= alpha[i*nrClass+int(solver.prob.Y[i])]
 	}
-	fmt.Printf("Objective value = %f\n", v)
-	fmt.Printf("nSV = %d\n", nSV)
+	logger.Printf("Objective value = %f\n", v)
+	logger.Printf("nSV = %d\n", nSV)
 }

@@ -1,6 +1,8 @@
 package liblinear
 
 import (
+	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -51,7 +53,7 @@ func TestTrainPredict(t *testing.T) {
 				continue
 			}
 
-			param := NewParameter(solver, C, 0.1, 1000, 0.1)
+			param := NewParameter(solver, C, 0.1, 0.1, 1000)
 			model, _ := Train(prob, param)
 
 			featureWeights := model.GetFeatureWeights()
@@ -64,7 +66,7 @@ func TestTrainPredict(t *testing.T) {
 			var i = 0
 			for _, value := range prob.Y {
 				prediction := Predict(model, prob.X[i])
-				assert.Equal(t, value, prediction)
+				assert.Equal(t, value, prediction, fmt.Sprintf("assertion failed for solverType %v", model.SolverType.Name()))
 
 				if model.isProbabilityModel() {
 					estimates := make([]float64, model.NumClass)
@@ -90,23 +92,46 @@ func TestTrainPredict(t *testing.T) {
 	}
 }
 
-// 			 int i = 0;
-// 			 for (double value : prob.y) {
-// 				 double prediction = Linear.predict(model, prob.x[i]);
-// 				 assertThat(prediction).as("prediction with solver " + solver).isEqualTo(value);
-// 				 if (model.isProbabilityModel()) {
-// 					 double[] estimates = new double[model.getNrClass()];
-// 					 double probabilityPrediction = Linear.predictProbability(model, prob.x[i], estimates);
-// 					 assertThat(probabilityPrediction).isEqualTo(prediction);
-// 					 assertThat(estimates[(int)probabilityPrediction]).isGreaterThanOrEqualTo(1.0 / model.getNrClass());
-// 					 double estimationSum = 0;
-// 					 for (double estimate : estimates) {
-// 						 estimationSum += estimate;
-// 					 }
-// 					 assertThat(estimationSum).isEqualTo(1.0, offset(0.001));
-// 				 }
-// 				 i++;
-// 			 }
-// 		 }
-// 	 }
-//  }
+func TestCrossValidation(t *testing.T) {
+	numClasses := random.Intn(10) + 1
+
+	prob := createRandomProblem(numClasses)
+
+	param := NewParameter(L2R_LR, 10, 0.01, 0.1, 1000)
+	nrFold := 10
+	target := make([]float64, prob.L)
+	CrossValidation(prob, param, nrFold, target)
+
+	for val := range target {
+		assert.True(t, val >= 0 && val < numClasses)
+	}
+}
+
+func createRandomProblem(numClasses int) *Problem {
+	var l = random.Intn(100) + 1
+	var n = random.Intn(100) + 1
+	prob := NewProblem(l, n, make([]float64, l), make([][]Feature, l), -1.0)
+
+	for i := 0; i < prob.L; i++ {
+		prob.Y[i] = float64(random.Intn(numClasses))
+		randomNumbers := make(map[int]struct{})
+		num := random.Intn(prob.N) + 1
+		for j := 0; j < num; j++ {
+			randomNumbers[random.Intn(prob.N)+1] = struct{}{}
+		}
+
+		var randomIndices []int
+		for k := range randomNumbers {
+			randomIndices = append(randomIndices, k)
+		}
+
+		sort.Ints(randomIndices)
+
+		prob.X[i] = make([]Feature, len(randomIndices))
+		for j := 0; j < len(randomIndices); j++ {
+			prob.X[i][j] = NewFeatureNode(randomIndices[j], random.Float64())
+		}
+	}
+
+	return prob
+}
