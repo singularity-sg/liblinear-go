@@ -102,8 +102,9 @@ func TestCrossValidation(t *testing.T) {
 	target := make([]float64, prob.L)
 	CrossValidation(prob, param, nrFold, target)
 
-	for val := range target {
-		assert.True(t, val >= 0 && val < numClasses)
+	for _, val := range target {
+		intVal := int(val)
+		assert.True(t, intVal >= 0 && intVal < numClasses)
 	}
 }
 
