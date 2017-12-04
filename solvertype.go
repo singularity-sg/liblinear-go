@@ -84,3 +84,12 @@ func (solverType *SolverType) IsSupportVectorRegression() bool {
 func (solverType *SolverType) IsLogisticRegressionSolver() bool {
 	return solverType.logisticRegressionSolver
 }
+
+func getSolverType(name string) *SolverType {
+	for _, s := range solverTypeValues {
+		if s.Name() == name {
+			return s
+		}
+	}
+	return nil
+}

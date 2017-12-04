@@ -1,12 +1,18 @@
 package liblinear
 
 import (
+	"bufio"
 	"fmt"
+	"io/ioutil"
+	"math"
+	"os"
 	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+var tempDir, _ = ioutil.TempDir("", "temp")
 
 func TestTrainPredict(t *testing.T) {
 
@@ -108,6 +114,68 @@ func TestCrossValidation(t *testing.T) {
 	}
 }
 
+func TestLoadSaveModel(t *testing.T) {
+	for _, solverType := range SolverTypeValues() {
+		model := createRandomModel()
+		model.SolverType = solverType
+		fName := "modeltest-" + solverType.Name()
+
+		if f, err := os.Create(fName); err == nil {
+			defer f.Close()
+			saveModel(f, model)
+		}
+
+		var loadedModel *Model
+		if of, err := os.Open(fName); err == nil {
+			defer of.Close()
+			loadedModel = loadModel(of)
+		}
+
+		assert.ObjectsAreEqualValues(model, loadedModel)
+	}
+}
+
+func TestLoadEmptyModel(t *testing.T) {
+	tmpFile, _ := ioutil.TempFile(tempDir, "tempFile")
+	writer := bufio.NewWriter(tmpFile)
+
+	writer.WriteString("solver_type L2R_LR\n")
+	writer.WriteString("nr_class 2\n")
+	writer.WriteString("label 1 2\n")
+	writer.WriteString("nr_feature 0\n")
+	writer.WriteString("bias -1.0\n")
+	writer.WriteString("w\n")
+	writer.Flush()
+	tmpFile.Close()
+
+	tmpFile, _ = os.Open(tmpFile.Name())
+	defer tmpFile.Close()
+
+	loadedModel := loadModel(tmpFile)
+	assert.Equal(t, L2R_LR, loadedModel.SolverType)
+	assert.Contains(t, loadedModel.Label, 1, 2)
+	assert.Equal(t, loadedModel.NumClass, 2)
+	assert.Equal(t, loadedModel.NumFeatures, 0)
+	assert.Equal(t, loadedModel.GetFeatureWeights(), []float64{})
+	assert.Equal(t, loadedModel.Bias, -1.0)
+}
+
+func createRandomModel() *Model {
+	label := []int{1, math.MaxInt32, 2}
+	solverType := L2R_LR
+	w := make([]float64, len(label)*300)
+	for i := 0; i < len(w); i++ {
+		w[i] = round(random.Float64()*100000, 0, 0) / 10000
+	}
+	w[random.Int31n(int32(len(w)))] = 0.0
+	w[random.Int31n(int32(len(w)))] = -0.0
+
+	numFeature := len(w)/len(label) - 1
+	nrClass := len(label)
+
+	return NewModel(2, label, nrClass, numFeature, solverType, w)
+}
+
 func createRandomProblem(numClasses int) *Problem {
 	var l = random.Intn(100) + 1
 	var n = random.Intn(100) + 1
@@ -135,4 +203,18 @@ func createRandomProblem(numClasses int) *Problem {
 	}
 
 	return prob
+}
+
+func round(val float64, roundOn float64, places int) (newVal float64) {
+	var round float64
+	pow := math.Pow(10, float64(places))
+	digit := pow * val
+	_, div := math.Modf(digit)
+	if div >= roundOn {
+		round = math.Ceil(digit)
+	} else {
+		round = math.Floor(digit)
+	}
+	newVal = round / pow
+	return
 }

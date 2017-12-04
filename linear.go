@@ -1,11 +1,15 @@
 package liblinear
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"math/rand"
 	"os"
+	"regexp"
+	"strconv"
 )
 
 const (
@@ -1532,6 +1536,150 @@ func GETI(y []int8, i int) int {
 // GETI_SVR :To support weights for instances, use GETI(i) (i)
 func GETI_SVR(i int) int {
 	return 0
+}
+
+// SaveModel saves the model file
+func saveModel(modelFile *os.File, model *Model) {
+
+	w := bufio.NewWriter(modelFile)
+
+	nrFeature := model.NumFeatures
+	wSize := nrFeature
+	if model.Bias >= 0 {
+		wSize++
+	}
+
+	nrW := model.NumClass
+	if model.NumClass == 2 && model.SolverType != MCSVM_CS {
+		nrW = 1
+	}
+
+	w.WriteString(fmt.Sprintf("solver_type %s\n", model.SolverType.Name()))
+	w.WriteString(fmt.Sprintf("nr_class %d\n", model.NumClass))
+
+	if model.Label != nil {
+		w.WriteString("label")
+		for i := 0; i < model.NumClass; i++ {
+			w.WriteString(fmt.Sprintf(" %d", model.Label[i]))
+		}
+		w.WriteString("\n")
+	}
+
+	w.WriteString(fmt.Sprintf("nr_feature %d\n", nrFeature))
+	w.WriteString(fmt.Sprintf("bias %.16g\n", model.Bias))
+
+	w.WriteString("w\n")
+	for i := 0; i < wSize; i++ {
+		for j := 0; j < nrW; j++ {
+			value := model.W[i*nrW+j]
+			if value == 0.0 {
+				w.WriteString(fmt.Sprintf("%d ", 0))
+			} else {
+				w.WriteString(fmt.Sprintf("%.16g ", value))
+			}
+		}
+		w.WriteString("\n")
+	}
+
+	w.Flush()
+}
+
+func loadModel(f *os.File) *Model {
+
+	var r = regexp.MustCompile("\\s+")
+	var bias float64
+	var solverType *SolverType
+	var nrClasses, nrFeatures int64
+	var label []int
+
+	reader := bufio.NewReader(f)
+
+header:
+	for {
+		line, err := reader.ReadString('\n')
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			panic("unable to read file :" + f.Name())
+		}
+
+		split := r.Split(line, -1)
+
+		switch split[0] {
+
+		case "solver_type":
+			solver := getSolverType(split[1])
+			if solver == nil {
+				panic("unknown solver type")
+			}
+			solverType = solver
+
+		case "nr_class":
+			nrClasses, _ = strconv.ParseInt(split[1], 10, 32)
+
+		case "nr_feature":
+			nrFeatures, _ = strconv.ParseInt(split[1], 10, 32)
+
+		case "bias":
+			bias, _ = strconv.ParseFloat(split[1], 32)
+
+		case "w":
+			break header
+
+		case "label":
+			label = make([]int, nrClasses)
+			for i := 0; i < int(nrClasses); i++ {
+				val, _ := strconv.ParseInt(split[i+1], 10, 32)
+				label[i] = int(val)
+			}
+
+		default:
+			panic("unknown text in model file: [" + line + "]")
+		}
+	}
+	wSize := nrFeatures
+	if bias >= 0 {
+		wSize++
+	}
+
+	nrW := nrClasses
+	if nrClasses == 2 && solverType == MCSVM_CS {
+		nrW = 1
+	}
+
+	w := make([]float64, wSize*nrW)
+	buffer := make([]rune, 128)
+
+	for i := int64(0); i < wSize; i++ {
+		for j := int64(0); j < nrW; j++ {
+			b := 0
+			for {
+				ch, s, _ := reader.ReadRune()
+
+				if s > 1 || ch == 0xfffd {
+					panic("unexpected EOF")
+				}
+
+				if ch == ' ' {
+					w[i*nrW+j], _ = strconv.ParseFloat(string(buffer[:b]), 64)
+					break
+				} else {
+					if b >= len(buffer) {
+						panic("illegal weight in model file at index " + string(i*nrW+j) + ", with string content '" + string(buffer) + "', is not terminated with a whitespace character, or is longer than expected (" + string(len(buffer)) + " characters max).")
+					}
+					buffer[b] = ch
+					b++
+				}
+			}
+		}
+	}
+
+	model := NewModel(float64(bias), label, int(nrClasses), int(nrFeatures), solverType, w)
+
+	return model
 }
 
 func checkProblemSize(n int, numClass int) {
