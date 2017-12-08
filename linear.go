@@ -1646,7 +1646,7 @@ header:
 	}
 
 	nrW := nrClasses
-	if nrClasses == 2 && solverType == MCSVM_CS {
+	if nrClasses == 2 && solverType != MCSVM_CS {
 		nrW = 1
 	}
 
@@ -1656,6 +1656,8 @@ header:
 	for i := int64(0); i < wSize; i++ {
 		for j := int64(0); j < nrW; j++ {
 			b := 0
+
+		WeightLoop:
 			for {
 				ch, s, _ := reader.ReadRune()
 
@@ -1663,12 +1665,15 @@ header:
 					panic("unexpected EOF")
 				}
 
-				if ch == ' ' {
+				switch ch {
+				case ' ':
 					w[i*nrW+j], _ = strconv.ParseFloat(string(buffer[:b]), 64)
-					break
-				} else {
+					break WeightLoop
+				case '\n':
+					continue
+				default:
 					if b >= len(buffer) {
-						panic("illegal weight in model file at index " + string(i*nrW+j) + ", with string content '" + string(buffer) + "', is not terminated with a whitespace character, or is longer than expected (" + string(len(buffer)) + " characters max).")
+						panic(fmt.Sprintf("illegal weight in model file at index %d with string content %s, is not terminated with a whitespace character, or is longer than expected (%d characters max).", i*nrW+j, string(buffer[:b]), len(buffer)))
 					}
 					buffer[b] = ch
 					b++

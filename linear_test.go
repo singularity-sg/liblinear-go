@@ -139,13 +139,13 @@ func TestLoadEmptyModel(t *testing.T) {
 	tmpFile, _ := ioutil.TempFile(tempDir, "tempFile")
 	writer := bufio.NewWriter(tmpFile)
 
-	writer.WriteString("solver_type L2R_LR\n")
-	writer.WriteString("nr_class 2\n")
-	writer.WriteString("label 1 2\n")
-	writer.WriteString("nr_feature 0\n")
-	writer.WriteString("bias -1.0\n")
-	writer.WriteString("w\n")
-	writer.Flush()
+	lines := []string{"solver_type L2R_LR",
+		"nr_class 2",
+		"label 1 2",
+		"nr_feature 0",
+		"bias -1.0",
+		"w"}
+	writeLines(writer, lines)
 	tmpFile.Close()
 
 	tmpFile, _ = os.Open(tmpFile.Name())
@@ -158,6 +158,77 @@ func TestLoadEmptyModel(t *testing.T) {
 	assert.Equal(t, loadedModel.NumFeatures, 0)
 	assert.Equal(t, loadedModel.GetFeatureWeights(), []float64{})
 	assert.Equal(t, loadedModel.Bias, -1.0)
+}
+
+func TestLoadSimpleModel(t *testing.T) {
+	tmpFile, _ := ioutil.TempFile(tempDir, "tempFile")
+	writer := bufio.NewWriter(tmpFile)
+
+	lines := []string{"solver_type L2R_L2LOSS_SVR",
+		"nr_class 2",
+		"label 1 2",
+		"nr_feature 6",
+		"bias -1.0",
+		"w",
+		"0.1 0.2 0.3 ",
+		"0.4 0.5 0.6 "}
+
+	writeLines(writer, lines)
+	tmpFile.Close()
+
+	tmpFile, _ = os.Open(tmpFile.Name())
+	defer tmpFile.Close()
+
+	loadedModel := loadModel(tmpFile)
+
+	assert.Equal(t, L2R_L2LOSS_SVR, loadedModel.SolverType)
+	assert.Equal(t, 2, loadedModel.NumClass)
+	assert.Equal(t, 6, loadedModel.NumFeatures)
+	assert.Equal(t, []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6}, loadedModel.GetFeatureWeights())
+	assert.InDelta(t, -1.0, loadedModel.Bias, 0.001)
+}
+
+func TestLoadIllegalModel(t *testing.T) {
+	tmpFile, _ := ioutil.TempFile(tempDir, "tempFile")
+	writer := bufio.NewWriter(tmpFile)
+
+	lines := []string{"solver_type L2R_L2LOSS_SVR",
+		"nr_class 2",
+		"label 1 2",
+		"nr_feature 10",
+		"bias -1.0",
+		"w",
+		"0.1 0.2 0.3 ",
+		"0.4 0.5 " + repeat("0", 1024),
+	}
+
+	writeLines(writer, lines)
+
+	tmpFile, _ = os.Open(tmpFile.Name())
+	defer tmpFile.Close()
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Recovered from panic [%v]\n", r)
+		}
+	}()
+	_ = loadModel(tmpFile)
+}
+
+func repeat(mystring string, numOfRepetitions int) string {
+	var val string
+	for i := 0; i < numOfRepetitions; i++ {
+		val += mystring
+	}
+	return val
+}
+
+func writeLines(writer *bufio.Writer, lines []string) {
+
+	for _, line := range lines {
+		writer.WriteString(line + "\n")
+	}
+	writer.Flush()
 }
 
 func createRandomModel() *Model {
