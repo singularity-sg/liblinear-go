@@ -503,6 +503,60 @@ func TestTranspose3(t *testing.T) {
 
 }
 
+func TestTrainUnsortedProblem(t *testing.T) {
+
+	x := make([][]Feature, 4)
+	x[0] = make([]Feature, 2)
+
+	x[0][0] = NewFeatureNode(2, 1)
+	x[0][1] = NewFeatureNode(1, 1)
+
+	prob := NewProblem(1, 2, []float64{0, 0, 0, 0}, x, -1)
+	param := NewParameter(L2R_LR, 10, 0.1, 0.1, 1000)
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Recovered from panic [%v]\n", r)
+		}
+	}()
+
+	Train(prob, param)
+
+	t.FailNow()
+}
+
+func TestTrainTooLargeProblem(t *testing.T) {
+
+	l := 1000
+	n := 20000000
+	y := make([]float64, l)
+	x := make([][]Feature, l)
+
+	for i := 0; i < l; i++ {
+		x[i] = []Feature{}
+		y[i] = float64(i)
+	}
+
+	prob := NewProblem(l, n, y, x, 0.0)
+
+	for _, solverType := range solverTypeValues {
+		if solverType.IsSupportVectorRegression() {
+			continue
+		}
+
+		param := NewParameter(solverType, 10, 0.1, 0.1, 1000)
+
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("Recovered from panic [%v]\n", r)
+			}
+		}()
+
+		Train(prob, param)
+	}
+
+}
+
 func repeat(mystring string, numOfRepetitions int) string {
 	var val string
 	for i := 0; i < numOfRepetitions; i++ {
