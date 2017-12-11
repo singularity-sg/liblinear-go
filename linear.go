@@ -1310,7 +1310,7 @@ func solveL1RL2Svc(probCol *Problem, w []float64, eps float64, cp float64, cn fl
 			fmt.Print(".")
 		}
 
-		if GMaxNew <= eps*GNorm1Init {
+		if GNorm1New <= eps*GNorm1Init {
 			if activeSize == wSize {
 				break
 			} else {

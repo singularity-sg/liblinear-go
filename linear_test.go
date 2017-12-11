@@ -215,6 +215,294 @@ func TestLoadIllegalModel(t *testing.T) {
 	_ = loadModel(tmpFile)
 }
 
+func TestPredictProbabilityWrongSolver(t *testing.T) {
+	l := 1
+	n := 1
+	x := make([][]Feature, l)
+	y := make([]float64, l)
+	for i := 0; i < l; i++ {
+		x[i] = []Feature{}
+		y[i] = float64(i)
+	}
+	prob := NewProblem(l, n, y, x, 0)
+	param := NewParameter(L2R_L1LOSS_SVC_DUAL, 10, 0.1, 0.1, 1000)
+
+	model, _ := Train(prob, param)
+
+	defer func() {
+		if r := recover(); r != nil {
+			assert.Equal(t, r, "probability output is only supported for logistic regression. This is currently only supported by the following solvers: L2R_LR, L1R_LR, L2R_LR_DUAL")
+		}
+	}()
+
+	PredictProbability(model, prob.X[0], []float64{0})
+	t.FailNow()
+
+}
+
+/**
+ * compared input/output values with the C version (1.51)
+ *
+ * <pre>
+ * IN:
+ * res prob.l = 4
+ * res prob.n = 4
+ * 0: (2,1) (4,1)
+ * 1: (1,1)
+ * 2: (3,1)
+ * 3: (2,2) (3,1) (4,1)
+ *
+ * TRANSPOSED:
+ *
+ * res prob.l = 4
+ * res prob.n = 4
+ * 0: (2,1)
+ * 1: (1,1) (4,2)
+ * 2: (3,1) (4,1)
+ * 3: (1,1) (4,1)
+ * </pre>
+ */
+func TestTranspose(t *testing.T) {
+	l := 4
+	n := 4
+	bias := float64(-1)
+	x := make([][]Feature, 4)
+	x[0] = make([]Feature, 2)
+	x[1] = make([]Feature, 1)
+	x[2] = make([]Feature, 1)
+	x[3] = make([]Feature, 3)
+
+	x[0][0] = NewFeatureNode(2, 1)
+	x[0][1] = NewFeatureNode(4, 1)
+
+	x[1][0] = NewFeatureNode(1, 1)
+	x[2][0] = NewFeatureNode(3, 1)
+
+	x[3][0] = NewFeatureNode(2, 2)
+	x[3][1] = NewFeatureNode(3, 1)
+	x[3][2] = NewFeatureNode(4, 1)
+
+	y := make([]float64, 4)
+	y[0] = 0
+	y[1] = 1
+	y[2] = 1
+	y[3] = 0
+
+	prob := NewProblem(l, n, y, x, bias)
+
+	transposed := transpose(prob)
+
+	assert.Equal(t, len(transposed.X[0]), 1)
+	assert.Equal(t, len(transposed.X[1]), 2)
+	assert.Equal(t, len(transposed.X[2]), 2)
+	assert.Equal(t, len(transposed.X[3]), 2)
+
+	assert.Equal(t, transposed.X[0][0], NewFeatureNode(2, 1))
+	assert.Equal(t, transposed.X[1][0], NewFeatureNode(1, 1))
+	assert.Equal(t, transposed.X[1][1], NewFeatureNode(4, 2))
+	assert.Equal(t, transposed.X[2][0], NewFeatureNode(3, 1))
+	assert.Equal(t, transposed.X[2][1], NewFeatureNode(4, 1))
+	assert.Equal(t, transposed.X[3][0], NewFeatureNode(1, 1))
+	assert.Equal(t, transposed.X[3][1], NewFeatureNode(4, 1))
+
+	assert.Equal(t, transposed.Y, prob.Y)
+
+}
+
+/**
+ *
+ * compared input/output values with the C version (1.51)
+ *
+ * <pre>
+ * IN:
+ * res prob.l = 5
+ * res prob.n = 10
+ * 0: (1,7) (3,3) (5,2)
+ * 1: (2,1) (4,5) (5,3) (7,4) (8,2)
+ * 2: (1,9) (3,1) (5,1) (10,7)
+ * 3: (1,2) (2,2) (3,9) (4,7) (5,8) (6,1) (7,5) (8,4)
+ * 4: (3,1) (10,3)
+ *
+ * TRANSPOSED:
+ *
+ * res prob.l = 5
+ * res prob.n = 10
+ * 0: (1,7) (3,9) (4,2)
+ * 1: (2,1) (4,2)
+ * 2: (1,3) (3,1) (4,9) (5,1)
+ * 3: (2,5) (4,7)
+ * 4: (1,2) (2,3) (3,1) (4,8)
+ * 5: (4,1)
+ * 6: (2,4) (4,5)
+ * 7: (2,2) (4,4)
+ * 8:
+ * 9: (3,7) (5,3)
+ * </pre>
+ */
+func TestTranspose2(t *testing.T) {
+	l := 5
+	n := 10
+	bias := float64(-1)
+	x := make([][]Feature, 5)
+	x[0] = make([]Feature, 3)
+	x[1] = make([]Feature, 5)
+	x[2] = make([]Feature, 4)
+	x[3] = make([]Feature, 8)
+	x[4] = make([]Feature, 2)
+
+	x[0][0] = NewFeatureNode(1, 7)
+	x[0][1] = NewFeatureNode(3, 3)
+	x[0][2] = NewFeatureNode(5, 2)
+
+	x[1][0] = NewFeatureNode(2, 1)
+	x[1][1] = NewFeatureNode(4, 5)
+	x[1][2] = NewFeatureNode(5, 3)
+	x[1][3] = NewFeatureNode(7, 4)
+	x[1][4] = NewFeatureNode(8, 2)
+
+	x[2][0] = NewFeatureNode(1, 9)
+	x[2][1] = NewFeatureNode(3, 1)
+	x[2][2] = NewFeatureNode(5, 1)
+	x[2][3] = NewFeatureNode(10, 7)
+
+	x[3][0] = NewFeatureNode(1, 2)
+	x[3][1] = NewFeatureNode(2, 2)
+	x[3][2] = NewFeatureNode(3, 9)
+	x[3][3] = NewFeatureNode(4, 7)
+	x[3][4] = NewFeatureNode(5, 8)
+	x[3][5] = NewFeatureNode(6, 1)
+	x[3][6] = NewFeatureNode(7, 5)
+	x[3][7] = NewFeatureNode(8, 4)
+
+	x[4][0] = NewFeatureNode(3, 1)
+	x[4][1] = NewFeatureNode(10, 3)
+
+	y := make([]float64, 5)
+	y[0] = 0
+	y[1] = 1
+	y[2] = 1
+	y[3] = 0
+	y[4] = 1
+
+	prob := NewProblem(l, n, y, x, bias)
+
+	transposed := transpose(prob)
+
+	assert.Equal(t, len(transposed.X[0]), 3)
+	assert.Equal(t, len(transposed.X[1]), 2)
+	assert.Equal(t, len(transposed.X[2]), 4)
+	assert.Equal(t, len(transposed.X[3]), 2)
+	assert.Equal(t, len(transposed.X[4]), 4)
+	assert.Equal(t, len(transposed.X[5]), 1)
+	assert.Equal(t, len(transposed.X[7]), 2)
+	assert.Equal(t, len(transposed.X[7]), 2)
+	assert.Equal(t, len(transposed.X[8]), 0)
+	assert.Equal(t, len(transposed.X[9]), 2)
+
+	assert.Equal(t, transposed.X[0][0], NewFeatureNode(1, 7))
+	assert.Equal(t, transposed.X[0][1], NewFeatureNode(3, 9))
+	assert.Equal(t, transposed.X[0][2], NewFeatureNode(4, 2))
+
+	assert.Equal(t, transposed.X[1][0], NewFeatureNode(2, 1))
+	assert.Equal(t, transposed.X[1][1], NewFeatureNode(4, 2))
+
+	assert.Equal(t, transposed.X[2][0], NewFeatureNode(1, 3))
+	assert.Equal(t, transposed.X[2][1], NewFeatureNode(3, 1))
+	assert.Equal(t, transposed.X[2][2], NewFeatureNode(4, 9))
+	assert.Equal(t, transposed.X[2][3], NewFeatureNode(5, 1))
+
+	assert.Equal(t, transposed.X[3][0], NewFeatureNode(2, 5))
+	assert.Equal(t, transposed.X[3][1], NewFeatureNode(4, 7))
+
+	assert.Equal(t, transposed.X[4][0], NewFeatureNode(1, 2))
+	assert.Equal(t, transposed.X[4][1], NewFeatureNode(2, 3))
+	assert.Equal(t, transposed.X[4][2], NewFeatureNode(3, 1))
+	assert.Equal(t, transposed.X[4][3], NewFeatureNode(4, 8))
+
+	assert.Equal(t, transposed.X[5][0], NewFeatureNode(4, 1))
+
+	assert.Equal(t, transposed.X[6][0], NewFeatureNode(2, 4))
+	assert.Equal(t, transposed.X[6][1], NewFeatureNode(4, 5))
+
+	assert.Equal(t, transposed.X[7][0], NewFeatureNode(2, 2))
+	assert.Equal(t, transposed.X[7][1], NewFeatureNode(4, 4))
+
+	assert.Equal(t, transposed.X[9][0], NewFeatureNode(3, 7))
+	assert.Equal(t, transposed.X[9][1], NewFeatureNode(5, 3))
+
+	assert.Equal(t, transposed.Y, prob.Y)
+
+}
+
+/**
+ * compared input/output values with the C version (1.51)
+ *
+ * IN:
+ * res prob.l = 3
+ * res prob.n = 4
+ * 0: (1,2) (3,1) (4,3)
+ * 1: (1,9) (2,7) (3,3) (4,3)
+ * 2: (2,1)
+ *
+ * TRANSPOSED:
+ *
+ * res prob.l = 3
+ *      * res prob.n = 4
+ * 0: (1,2) (2,9)
+ * 1: (2,7) (3,1)
+ * 2: (1,1) (2,3)
+ * 3: (1,3) (2,3)
+ *
+ */
+func TestTranspose3(t *testing.T) {
+	l := 3
+	n := 4
+	bias := float64(0)
+	x := make([][]Feature, 4)
+	x[0] = make([]Feature, 3)
+	x[1] = make([]Feature, 4)
+	x[2] = make([]Feature, 1)
+	x[3] = make([]Feature, 3)
+
+	x[0][0] = NewFeatureNode(1, 2)
+	x[0][1] = NewFeatureNode(3, 1)
+	x[0][2] = NewFeatureNode(4, 3)
+
+	x[1][0] = NewFeatureNode(1, 9)
+	x[1][1] = NewFeatureNode(2, 7)
+	x[1][2] = NewFeatureNode(3, 3)
+	x[1][3] = NewFeatureNode(4, 3)
+
+	x[2][0] = NewFeatureNode(2, 1)
+
+	x[3][0] = NewFeatureNode(3, 2)
+
+	y := make([]float64, 3)
+
+	prob := NewProblem(l, n, y, x, bias)
+
+	transposed := transpose(prob)
+
+	assert.Equal(t, len(transposed.X), 4)
+	assert.Equal(t, len(transposed.X[0]), 2)
+	assert.Equal(t, len(transposed.X[1]), 2)
+	assert.Equal(t, len(transposed.X[2]), 2)
+	assert.Equal(t, len(transposed.X[3]), 2)
+
+	assert.Equal(t, transposed.X[0][0], NewFeatureNode(1, 2))
+	assert.Equal(t, transposed.X[0][1], NewFeatureNode(2, 9))
+
+	assert.Equal(t, transposed.X[1][0], NewFeatureNode(2, 7))
+	assert.Equal(t, transposed.X[1][1], NewFeatureNode(3, 1))
+
+	assert.Equal(t, transposed.X[2][0], NewFeatureNode(1, 1))
+	assert.Equal(t, transposed.X[2][1], NewFeatureNode(2, 3))
+
+	assert.Equal(t, transposed.X[3][0], NewFeatureNode(1, 3))
+	assert.Equal(t, transposed.X[3][1], NewFeatureNode(2, 3))
+
+}
+
 func repeat(mystring string, numOfRepetitions int) string {
 	var val string
 	for i := 0; i < numOfRepetitions; i++ {
