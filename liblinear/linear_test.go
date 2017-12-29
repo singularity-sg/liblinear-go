@@ -106,7 +106,7 @@ func TestCrossValidation(t *testing.T) {
 	param := NewParameter(L2R_LR, 10, 0.01, 0.1, 1000)
 	nrFold := 10
 	target := make([]float64, prob.L)
-	CrossValidation(prob, param, nrFold, target)
+	crossValidation(prob, param, nrFold, target)
 
 	for _, val := range target {
 		intVal := int(val)

@@ -20,8 +20,7 @@ var logger = log.New(os.Stdout, "[liblinear] ", log.LstdFlags)
 
 var random = rand.New(rand.NewSource(0))
 
-// CrossValidation uses n-fold method to verify model
-func CrossValidation(prob *Problem, param *Parameter, nrFold int, target []float64) {
+func crossValidation(prob *Problem, param *Parameter, nrFold int, target []float64) {
 	var i int
 	var l = prob.L
 	var perm = make([]int, l)
@@ -65,12 +64,24 @@ func CrossValidation(prob *Problem, param *Parameter, nrFold int, target []float
 			k++
 		}
 
-		if subModel, err := Train(subProb, param); err == nil {
+		if subModel, err := train(subProb, param); err == nil {
 			for j = begin; j < end; j++ {
 				target[perm[j]] = Predict(subModel, prob.X[perm[j]])
 			}
 		}
 	}
+}
+
+func findParameterC(prob *Problem, param *Parameter, nrFold int, startC float64, maxC float64) *ParameterSearchResult {
+	// variables for CV
+	var i int
+	l := prob.L
+	perm := make([]int, l)
+	target := make([]float64, l)
+	subProb := make([]Problem, nrFold)
+
+	// variables for warm start
+	var ratio float64 = 2
 }
 
 // Predict uses the model to predict the result based on the input features x
@@ -177,8 +188,8 @@ func PredictProbability(model *Model, x []Feature, probEstimates []float64) floa
 	return label
 }
 
-// Train uses the Problem and Parameters to create a training model
-func Train(prob *Problem, param *Parameter) (*Model, error) {
+// train uses the Problem and Parameters to create a training model
+func train(prob *Problem, param *Parameter) (*Model, error) {
 
 	for _, nodes := range prob.X {
 		indexBefore := 0
