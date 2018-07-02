@@ -64,7 +64,7 @@ func crossValidation(prob *Problem, param *Parameter, nrFold int, target []float
 			k++
 		}
 
-		if subModel, err := train(subProb, param); err == nil {
+		if subModel, err := Train(subProb, param); err == nil {
 			for j = begin; j < end; j++ {
 				target[perm[j]] = Predict(subModel, prob.X[perm[j]])
 			}
@@ -74,14 +74,143 @@ func crossValidation(prob *Problem, param *Parameter, nrFold int, target []float
 
 func findParameterC(prob *Problem, param *Parameter, nrFold int, startC float64, maxC float64) *ParameterSearchResult {
 	// variables for CV
-	var i int
 	l := prob.L
 	perm := make([]int, l)
 	target := make([]float64, l)
-	subProb := make([]Problem, nrFold)
+	subProb := make([]*Problem, nrFold)
 
 	// variables for warm start
 	var ratio float64 = 2
+	prevW := make([][]float64, nrFold)
+	numUnchangedW := 0
+	param1 := param
+
+	if nrFold > l {
+		nrFold = l
+		log.Println("WARNING: # folds > # data. Will use # folds = # data instead (i.e., leave-one-out cross validation)")
+	}
+
+	foldStart := make([]int, nrFold+1)
+
+	for i := 0; i < l; i++ {
+		perm[i] = i
+	}
+
+	for i := 0; i < l; i++ {
+		j := i + int(rand.Int63n(int64(l-i)))
+		swapIntArray(perm, i, j)
+	}
+
+	for i := 0; i < nrFold; i++ {
+		foldStart[i] = i * l / nrFold
+	}
+
+	for i := 0; i < nrFold; i++ {
+		begin := foldStart[i]
+		end := foldStart[i+1]
+		subProbL := l - (end - begin)
+
+		subProb[i] = NewProblem(subProbL, prob.N, make([]float64, subProbL), make([][]Feature, subProbL), prob.Bias)
+
+		k := 0
+		for j := 0; j < begin; j++ {
+			subProb[i].X[k] = prob.X[perm[j]]
+			subProb[i].Y[k] = prob.Y[perm[j]]
+			k++
+		}
+
+		for j := end; j < l; j++ {
+			subProb[i].X[k] = prob.X[perm[j]]
+			subProb[i].Y[k] = prob.Y[perm[j]]
+			k++
+		}
+
+	}
+
+	bestC := math.Inf(-1)
+	bestRate := 0.0
+
+	if startC <= 0 {
+		startC = calcStartC(prob, param)
+	}
+	param1.C = startC
+
+	for param1.C <= maxC {
+		for i := 0; i < nrFold; i++ {
+			begin := foldStart[i]
+			end := foldStart[i+1]
+
+			param1.InitSol = prevW[i]
+
+			var subModel *Model
+			var err error
+			if subModel, err = Train(subProb[i], param1); err != nil {
+				log.Fatalf("Unable to train subproblem... %v", subProb[i])
+			}
+
+			var totalWSize int
+			if subModel.NumClass == 2 {
+				totalWSize = subProb[i].N
+			} else {
+				totalWSize = subProb[i].N * subModel.NumClass
+			}
+
+			if prevW[i] == nil {
+				prevW[i] = make([]float64, totalWSize)
+				for j := 0; j < totalWSize; j++ {
+					prevW[i][j] = subModel.W[j]
+				}
+			} else if numUnchangedW >= 0 {
+				normWDiff := 0.0
+				for j := 0; j < totalWSize; j++ {
+					normWDiff += (subModel.W[j] - prevW[i][j]) * (subModel.W[j] - prevW[i][j])
+					prevW[i][j] = subModel.W[j]
+				}
+				normWDiff = math.Sqrt(normWDiff)
+
+				if normWDiff > 1e-15 {
+					numUnchangedW = -1
+				}
+			} else {
+				for j := 0; j < totalWSize; j++ {
+					prevW[i][j] = subModel.W[j]
+				}
+			}
+
+			for j := begin; j < end; j++ {
+				target[perm[j]] = Predict(subModel, prob.X[perm[j]])
+			}
+		}
+
+		totalCorrect := 0
+		for i := 0; i < prob.L; i++ {
+			if target[i] == prob.Y[i] {
+				totalCorrect++
+			}
+		}
+
+		currentRate := float64(totalCorrect) / float64(prob.L)
+		if currentRate > bestRate {
+			bestC = param1.C
+			bestRate = currentRate
+		}
+
+		log.Printf("log2c=%7.2f\trate=%g\n", math.Log(param1.C)/math.Log(2.0), 100.0*currentRate)
+		numUnchangedW++
+
+		if numUnchangedW == 3 {
+			break
+		}
+
+		param1.C = param1.C * ratio
+
+	}
+
+	if param1.C > maxC && maxC > startC {
+		log.Printf("warning: maximum C reached.\n")
+	}
+
+	return &ParameterSearchResult{bestC: bestC, bestRate: bestRate}
 }
 
 // Predict uses the model to predict the result based on the input features x
@@ -188,8 +317,8 @@ func PredictProbability(model *Model, x []Feature, probEstimates []float64) floa
 	return label
 }
 
-// train uses the Problem and Parameters to create a training model
-func train(prob *Problem, param *Parameter) (*Model, error) {
+// Train uses the Problem and Parameters to create a training model
+func Train(prob *Problem, param *Parameter) (*Model, error) {
 
 	for _, nodes := range prob.X {
 		indexBefore := 0
@@ -201,7 +330,7 @@ func train(prob *Problem, param *Parameter) (*Model, error) {
 		}
 	}
 
-	if param.initSol != nil && param.solverType.Name() != L2R_LR.Name() && param.solverType.Name() != L2R_L2LOSS_SVC.Name() {
+	if param.InitSol != nil && param.SolverType.Name() != L2R_LR.Name() && param.SolverType.Name() != L2R_L2LOSS_SVC.Name() {
 		panic("Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC")
 	}
 
@@ -217,10 +346,10 @@ func train(prob *Problem, param *Parameter) (*Model, error) {
 		model.NumFeatures = n
 	}
 
-	model.SolverType = param.solverType
+	model.SolverType = param.SolverType
 	model.Bias = prob.Bias
 
-	if param.solverType.IsSupportVectorRegression() {
+	if param.SolverType.IsSupportVectorRegression() {
 		model.W = make([]float64, wSize)
 		model.NumClass = 2
 		model.Label = nil
@@ -249,19 +378,19 @@ func train(prob *Problem, param *Parameter) (*Model, error) {
 		// calculate weighted C
 		weightedC := make([]float64, nrClass)
 		for i := 0; i < nrClass; i++ {
-			weightedC[i] = param.c
+			weightedC[i] = param.C
 		}
 		for i := 0; i < param.GetNumWeights(); i++ {
 			var j int
 			for j = 0; j < nrClass; j++ {
-				if param.weightLabel[i] == label[j] {
+				if param.WeightLabel[i] == label[j] {
 					break
 				}
 			}
 			if j == nrClass {
-				panic(fmt.Sprintf("class label %d specified in weight is not found", param.weightLabel[i]))
+				panic(fmt.Sprintf("class label %d specified in weight is not found", param.WeightLabel[i]))
 			}
-			weightedC[j] *= param.weight[i]
+			weightedC[j] *= param.Weight[i]
 		}
 
 		// constructing the subproblem
@@ -277,7 +406,7 @@ func train(prob *Problem, param *Parameter) (*Model, error) {
 		}
 
 		// multi-class svm by Crammer and Singer
-		if param.solverType == MCSVM_CS {
+		if param.SolverType == MCSVM_CS {
 			model.W = make([]float64, n*nrClass)
 			for i := 0; i < nrClass; i++ {
 				for j := start[i]; j < start[i]+count[i]; j++ {
@@ -285,7 +414,7 @@ func train(prob *Problem, param *Parameter) (*Model, error) {
 				}
 			}
 
-			solver := NewSolverMCSVMCS(subProb, nrClass, weightedC, param.eps, 100000)
+			solver := NewSolverMCSVMCS(subProb, nrClass, weightedC, param.Eps, 100000)
 			solver.solve(model.W)
 		} else {
 			if nrClass == 2 {
@@ -300,9 +429,9 @@ func train(prob *Problem, param *Parameter) (*Model, error) {
 					subProb.Y[k] = -1
 				}
 
-				if param.initSol != nil {
+				if param.InitSol != nil {
 					for i := 0; i < wSize; i++ {
-						model.W[i] = param.initSol[i]
+						model.W[i] = param.InitSol[i]
 					}
 				} else {
 					for i := 0; i < wSize; i++ {
@@ -329,9 +458,9 @@ func train(prob *Problem, param *Parameter) (*Model, error) {
 						subProb.Y[k] = -1
 					}
 
-					if param.initSol != nil {
+					if param.InitSol != nil {
 						for j := 0; j < wSize; j++ {
-							w[j] = param.initSol[j*nrClass+i]
+							w[j] = param.InitSol[j*nrClass+i]
 						}
 					} else {
 						for j := 0; j < wSize; j++ {
@@ -339,7 +468,7 @@ func train(prob *Problem, param *Parameter) (*Model, error) {
 						}
 					}
 
-					trainOne(subProb, param, w, weightedC[i], param.c)
+					trainOne(subProb, param, w, weightedC[i], param.C)
 
 					for j := 0; j < n; j++ {
 						model.W[j*nrClass+i] = w[j]
@@ -352,11 +481,36 @@ func train(prob *Problem, param *Parameter) (*Model, error) {
 	return model, nil
 }
 
+// Calculate the initial C for parameter selection
+func calcStartC(prob *Problem, param *Parameter) float64 {
+	xTx := 0.0
+	maxXTx := 0.0
+	for i := 0; i < prob.L; i++ {
+		xTx = 0
+		for _, xi := range prob.X[i] {
+			val := xi.GetValue()
+			xTx += val * val
+		}
+		if xTx > maxXTx {
+			maxXTx = xTx
+		}
+	}
+
+	minC := 1.0
+	if param.SolverType == L2R_LR {
+		minC = 1.0 / (float64(prob.L) * maxXTx)
+	} else if param.SolverType == L2R_L2LOSS_SVC {
+		minC = 1.0 / (2 * float64(prob.L) * maxXTx)
+	}
+
+	return math.Pow(2, math.Floor(math.Log(minC)/math.Log(2.0)))
+}
+
 func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float64) {
-	eps := param.eps
+	eps := param.Eps
 	epsCg := 0.1
 
-	if param.initSol != nil {
+	if param.InitSol != nil {
 		epsCg = 0.5
 	}
 
@@ -370,7 +524,7 @@ func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float
 	neg := prob.L - pos
 	primalSolverTol := eps * math.Max(math.Min(float64(pos), float64(neg)), 1) / float64(prob.L)
 
-	switch param.solverType {
+	switch param.SolverType {
 
 	case L2R_LR:
 		c := make([]float64, prob.L, prob.L)
@@ -382,7 +536,7 @@ func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float
 			}
 		}
 		funObj := NewL2RLRFunc(prob, c)
-		tronObj := NewTron(funObj, primalSolverTol, param.maxIters, epsCg)
+		tronObj := NewTron(funObj, primalSolverTol, param.MaxIters, epsCg)
 		tronObj.tron(w)
 
 	case L2R_L2LOSS_SVC:
@@ -395,31 +549,31 @@ func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float
 			}
 		}
 		funObj := NewL2RL2SvcFunc(prob, c)
-		tronObj := NewTron(funObj, primalSolverTol, param.maxIters, epsCg)
+		tronObj := NewTron(funObj, primalSolverTol, param.MaxIters, epsCg)
 		tronObj.tron(w)
 
 	case L2R_L2LOSS_SVC_DUAL:
-		solveL2RL1L2Svc(prob, w, eps, cp, cn, L2R_L2LOSS_SVC_DUAL, param.maxIters)
+		solveL2RL1L2Svc(prob, w, eps, cp, cn, L2R_L2LOSS_SVC_DUAL, param.MaxIters)
 
 	case L2R_L1LOSS_SVC_DUAL:
-		solveL2RL1L2Svc(prob, w, eps, cp, cn, L2R_L1LOSS_SVC_DUAL, param.maxIters)
+		solveL2RL1L2Svc(prob, w, eps, cp, cn, L2R_L1LOSS_SVC_DUAL, param.MaxIters)
 
 	case L1R_L2LOSS_SVC:
 		probCol := transpose(prob)
-		solveL1RL2Svc(probCol, w, primalSolverTol, cp, cn, param.maxIters)
+		solveL1RL2Svc(probCol, w, primalSolverTol, cp, cn, param.MaxIters)
 	case L1R_LR:
 		probCol := transpose(prob)
-		solveL1RLR(probCol, w, primalSolverTol, cp, cn, param.maxIters)
+		solveL1RLR(probCol, w, primalSolverTol, cp, cn, param.MaxIters)
 	case L2R_LR_DUAL:
-		solveL2RLRDual(prob, w, eps, cp, cn, param.maxIters)
+		solveL2RLRDual(prob, w, eps, cp, cn, param.MaxIters)
 	case L2R_L2LOSS_SVR:
 		c := make([]float64, prob.L)
 		for i := 0; i < prob.L; i++ {
-			c[i] = param.c
+			c[i] = param.C
 		}
 
-		funObj := NewL2RL2SvrFunc(prob, c, param.p)
-		tronObj := NewTron(funObj, param.eps, param.maxIters, epsCg)
+		funObj := NewL2RL2SvrFunc(prob, c, param.P)
+		tronObj := NewTron(funObj, param.Eps, param.MaxIters, epsCg)
 		tronObj.tron(w)
 	case L2R_L1LOSS_SVR_DUAL:
 		fallthrough
@@ -427,18 +581,18 @@ func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float
 		solveL2RL1L2Svr(prob, w, param)
 
 	default:
-		panic(fmt.Sprintf("unknown solver type : %+v", param.solverType))
+		panic(fmt.Sprintf("unknown solver type : %+v", param.SolverType))
 	}
 }
 
 func solveL2RL1L2Svr(prob *Problem, w []float64, param *Parameter) {
 	l := prob.L
-	C := param.c
-	p := param.p
+	C := param.C
+	p := param.P
 	wSize := prob.N
-	eps := param.eps
+	eps := param.Eps
 	var i, s, iter int
-	maxIter := param.maxIters
+	maxIter := param.MaxIters
 	activeSize := l
 	index := make([]int, l)
 
@@ -454,7 +608,7 @@ func solveL2RL1L2Svr(prob *Problem, w []float64, param *Parameter) {
 	lambda := []float64{0.5 / C}
 	upperBound := []float64{math.Inf(1)}
 
-	if param.solverType == L2R_L1LOSS_SVR_DUAL {
+	if param.SolverType == L2R_L1LOSS_SVR_DUAL {
 		lambda[0] = 0
 		upperBound[0] = C
 	}
@@ -1550,7 +1704,7 @@ func GETI_SVR(i int) int {
 }
 
 // SaveModel saves the model file
-func saveModel(modelFile *os.File, model *Model) {
+func SaveModel(modelFile *os.File, model *Model) {
 
 	w := bufio.NewWriter(modelFile)
 
@@ -1595,7 +1749,7 @@ func saveModel(modelFile *os.File, model *Model) {
 	w.Flush()
 }
 
-func loadModel(f *os.File) *Model {
+func LoadModel(f *os.File) *Model {
 
 	var r = regexp.MustCompile("\\s+")
 	var bias float64

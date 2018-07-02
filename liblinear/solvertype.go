@@ -75,6 +75,11 @@ func (solverType *SolverType) Name() string {
 	return solverType.name
 }
 
+// Id of solvertype
+func (solverType *SolverType) Id() int {
+	return solverType.id
+}
+
 // IsSupportVectorRegression returns if this solver type supports vector regression
 func (solverType *SolverType) IsSupportVectorRegression() bool {
 	return solverType.supportVectorRegression
@@ -91,5 +96,16 @@ func getSolverType(name string) *SolverType {
 			return s
 		}
 	}
+	return nil
+}
+
+//GetById returns back the solverType based on an id
+func GetById(id int) *SolverType {
+	for _, solverType := range solverTypeValues {
+		if solverType.id == id {
+			return solverType
+		}
+	}
+
 	return nil
 }

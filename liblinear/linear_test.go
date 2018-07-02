@@ -122,13 +122,13 @@ func TestLoadSaveModel(t *testing.T) {
 
 		if f, err := os.Create(fName); err == nil {
 			defer f.Close()
-			saveModel(f, model)
+			SaveModel(f, model)
 		}
 
 		var loadedModel *Model
 		if of, err := os.Open(fName); err == nil {
 			defer of.Close()
-			loadedModel = loadModel(of)
+			loadedModel = LoadModel(of)
 		}
 
 		assert.ObjectsAreEqualValues(model, loadedModel)
@@ -151,7 +151,7 @@ func TestLoadEmptyModel(t *testing.T) {
 	tmpFile, _ = os.Open(tmpFile.Name())
 	defer tmpFile.Close()
 
-	loadedModel := loadModel(tmpFile)
+	loadedModel := LoadModel(tmpFile)
 	assert.Equal(t, L2R_LR, loadedModel.SolverType)
 	assert.Contains(t, loadedModel.Label, 1, 2)
 	assert.Equal(t, loadedModel.NumClass, 2)
@@ -179,7 +179,7 @@ func TestLoadSimpleModel(t *testing.T) {
 	tmpFile, _ = os.Open(tmpFile.Name())
 	defer tmpFile.Close()
 
-	loadedModel := loadModel(tmpFile)
+	loadedModel := LoadModel(tmpFile)
 
 	assert.Equal(t, L2R_L2LOSS_SVR, loadedModel.SolverType)
 	assert.Equal(t, 2, loadedModel.NumClass)
@@ -212,7 +212,7 @@ func TestLoadIllegalModel(t *testing.T) {
 			fmt.Printf("Recovered from panic [%v]\n", r)
 		}
 	}()
-	_ = loadModel(tmpFile)
+	_ = LoadModel(tmpFile)
 }
 
 func TestPredictProbabilityWrongSolver(t *testing.T) {

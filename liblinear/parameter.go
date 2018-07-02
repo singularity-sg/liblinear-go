@@ -2,24 +2,24 @@ package liblinear
 
 // Parameter contains the weights for solving
 type Parameter struct {
-	c           float64
-	eps         float64 // Stopping criteria
-	maxIters    int
-	solverType  *SolverType
-	weight      []float64
-	weightLabel []int
-	p           float64
-	initSol     []float64
+	C           float64
+	Eps         float64 // Stopping criteria
+	MaxIters    int
+	SolverType  *SolverType
+	Weight      []float64
+	WeightLabel []int
+	P           float64
+	InitSol     []float64
 }
 
 // NewParameter constructs a Parameter
-func NewParameter(solverType *SolverType, c float64, eps float64, p float64, maxIters int) *Parameter {
+func NewParameter(SolverType *SolverType, c float64, eps float64, p float64, maxIters int) *Parameter {
 	parameter := &Parameter{
-		solverType: solverType,
-		c:          c,
-		eps:        eps,
-		maxIters:   maxIters,
-		p:          p,
+		SolverType: SolverType,
+		C:          c,
+		Eps:        eps,
+		MaxIters:   maxIters,
+		P:          p,
 	}
 
 	return parameter
@@ -27,8 +27,8 @@ func NewParameter(solverType *SolverType, c float64, eps float64, p float64, max
 
 // GetNumWeights gets the weights
 func (p *Parameter) GetNumWeights() int {
-	if p.weight == nil {
+	if p.Weight == nil {
 		return 0
 	}
-	return len(p.weight)
+	return len(p.Weight)
 }
