@@ -74,7 +74,7 @@ func (t *Training) DoCrossValidation() {
 		}
 		log.Printf("Cross Validation Mean squared error = %g\n", totalError/float64(t.Prob.L))
 		log.Printf("Cross Validation Squared correlation coefficient = %g\n",
-			(float64(t.Prob.L)*sumvy-sumv*sumy)*(float64(t.Prob.L)*sumvy-sumv*sumy)/((float64(t.Prob.L)*sumvv-sumv*sumv)*(float64(t.Prob.L)*sumyy-sumy*sumy)))
+			(float64(t.Prob.L)*sumvy-sumv*sumy)*(float64(t.Prob.L)*sumvy-sumv*sumy)/(float64(t.Prob.L)*sumvv-sumv*sumv)*(float64(t.Prob.L)*sumyy-sumy*sumy))
 	} else {
 		totalCorrect := 0
 		for i := 0; i < t.Prob.L; i++ {
@@ -83,7 +83,7 @@ func (t *Training) DoCrossValidation() {
 			}
 		}
 		log.Printf("correct: %d\n", totalCorrect)
-		log.Printf("Cross Validation Accuracy = %g\n", float64(100.0*totalCorrect/t.Prob.L))
+		log.Printf("Cross Validation Accuracy = %g%%\n", float64(100.0*totalCorrect/t.Prob.L))
 	}
 }
 

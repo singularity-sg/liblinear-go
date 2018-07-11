@@ -13,14 +13,8 @@ import (
 var err error
 
 func parseTrainingFromArgs(args []string) *liblinear.Training {
-	var s int
-	var c int
-	var p float64
-	var e int
 	var bias float64
-	var v int
 	var findC bool
-	var quiet bool
 
 	var cSpecified bool
 	var solverSpecified bool
