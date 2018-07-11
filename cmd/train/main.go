@@ -51,12 +51,14 @@ func parseTrainingFromArgs(args []string) *liblinear.Training {
 			c, _ := strconv.Atoi(val)
 			param.C = float64(c)
 			cSpecified = true
+		case "-p":
+			param.P, _ = strconv.ParseFloat(val, 64)
 		case "-e":
 			eps, _ := strconv.Atoi(val)
 			param.Eps = float64(eps)
 		case "-B":
-			var b int
-			if b, err = strconv.Atoi(val); err != nil {
+			var b float64
+			if b, err = strconv.ParseFloat(val, 64); err != nil {
 				log.Fatalf("bias value is not valid %f", bias)
 			}
 			bias = float64(b)
@@ -103,7 +105,7 @@ func parseTrainingFromArgs(args []string) *liblinear.Training {
 		}
 	}
 
-	if param.Eps == math.Inf(-1) {
+	if param.Eps == math.Inf(1) {
 		switch param.SolverType {
 		case liblinear.L2R_LR:
 			fallthrough

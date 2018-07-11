@@ -40,7 +40,7 @@ func crossValidation(prob *Problem, param *Parameter, nrFold int, target []float
 		swapIntArray(perm, i, j)
 	}
 
-	for i = 0; i < nrFold; i++ {
+	for i = 0; i <= nrFold; i++ {
 		foldStart[i] = i * l / nrFold
 	}
 
@@ -101,7 +101,7 @@ func findParameterC(prob *Problem, param *Parameter, nrFold int, startC float64,
 		swapIntArray(perm, i, j)
 	}
 
-	for i := 0; i < nrFold; i++ {
+	for i := 0; i <= nrFold; i++ {
 		foldStart[i] = i * l / nrFold
 	}
 
@@ -127,7 +127,7 @@ func findParameterC(prob *Problem, param *Parameter, nrFold int, startC float64,
 
 	}
 
-	bestC := math.Inf(-1)
+	bestC := math.NaN()
 	bestRate := 0.0
 
 	if startC <= 0 {

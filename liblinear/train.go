@@ -51,11 +51,7 @@ func (t *Training) DoCrossValidation() {
 
 	target := make([]float64, t.Prob.L)
 	totalError := 0.0
-	sumv := 0.0
-	sumy := 0.0
-	sumvv := 0.0
-	sumyy := 0.0
-	sumvy := 0.0
+	var sumv, sumy, sumvv, sumyy, sumvy float64
 
 	start := time.Now()
 	crossValidation(t.Prob, t.Param, t.NrFold, target)
