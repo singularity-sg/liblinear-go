@@ -123,10 +123,10 @@ func ReadProblem(inputStream io.Reader, bias float64) *Problem {
 
 			var key int64
 			if key, err = strconv.ParseInt(keyVal[0], 10, 32); err != nil {
-				panic(fmt.Sprintf("Error with the token %d, err=%v", key, err))
+				panic(fmt.Sprintf("Error with the key val %s, err=%v", keyVal[0], err))
 			}
 
-			if key < 0 {
+			if key <= 0 {
 				panic(fmt.Sprintf("Invalid index %d on line %d", key, lineNr))
 			}
 
@@ -138,7 +138,7 @@ func ReadProblem(inputStream io.Reader, bias float64) *Problem {
 
 			var val float64
 			if val, err = strconv.ParseFloat(keyVal[1], 64); err != nil {
-				panic(fmt.Sprintf("Error with the token %f, err=%v", val, err))
+				panic(fmt.Sprintf("Error with the token val %s, err=%v", keyVal[1], err))
 			}
 
 			x[i-1] = NewFeatureNode(int(key), val)

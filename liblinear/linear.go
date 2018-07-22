@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 )
 
@@ -273,7 +274,7 @@ func predictValues(model *Model, x []Feature, decValues []float64) float64 {
 
 //PredictProbability gives the probability estimates of each class given the features
 func PredictProbability(model *Model, x []Feature, probEstimates []float64) float64 {
-	if !model.isProbabilityModel() {
+	if !model.IsProbabilityModel() {
 		sb := "probability output is only supported for logistic regression"
 		sb = sb + ". This is currently only supported by the following solvers: "
 		var i int
@@ -1850,6 +1851,65 @@ header:
 	model := NewModel(float64(bias), label, int(nrClasses), int(nrFeatures), solverType, w)
 
 	return model
+}
+
+func round(val float64, roundOn float64, places int) (newVal float64) {
+	var round float64
+	pow := math.Pow(10, float64(places))
+	digit := pow * val
+	_, div := math.Modf(digit)
+	if div >= roundOn {
+		round = math.Ceil(digit)
+	} else {
+		round = math.Floor(digit)
+	}
+	newVal = round / pow
+	return
+}
+
+func CreateRandomModel() *Model {
+	label := []int{1, math.MaxInt32, 2}
+	solverType := L2R_LR
+	w := make([]float64, len(label)*300)
+	for i := 0; i < len(w); i++ {
+		w[i] = round(random.Float64()*100000, 0, 0) / 10000
+	}
+	w[random.Int31n(int32(len(w)))] = 0.0
+	w[random.Int31n(int32(len(w)))] = -0.0
+
+	numFeature := len(w)/len(label) - 1
+	nrClass := len(label)
+
+	return NewModel(2, label, nrClass, numFeature, solverType, w)
+}
+
+func CreateRandomProblem(numClasses int) *Problem {
+	var l = random.Intn(100) + 1
+	var n = random.Intn(100) + 1
+	prob := NewProblem(l, n, make([]float64, l), make([][]Feature, l), -1.0)
+
+	for i := 0; i < prob.L; i++ {
+		prob.Y[i] = float64(random.Intn(numClasses))
+		randomNumbers := make(map[int]struct{})
+		num := random.Intn(prob.N) + 1
+		for j := 0; j < num; j++ {
+			randomNumbers[random.Intn(prob.N)+1] = struct{}{}
+		}
+
+		var randomIndices []int
+		for k := range randomNumbers {
+			randomIndices = append(randomIndices, k)
+		}
+
+		sort.Ints(randomIndices)
+
+		prob.X[i] = make([]Feature, len(randomIndices))
+		for j := 0; j < len(randomIndices); j++ {
+			prob.X[i][j] = NewFeatureNode(randomIndices[j], random.Float64())
+		}
+	}
+
+	return prob
 }
 
 func checkProblemSize(n int, numClass int) {

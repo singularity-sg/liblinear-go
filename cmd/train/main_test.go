@@ -185,6 +185,8 @@ func TestReadProblem(t *testing.T) {
 	assert.Equal(t, 8, problem.N)
 	assert.Equal(t, problem.L, len(problem.Y))
 	assert.Equal(t, len(problem.X), len(problem.Y))
+
+	validate(problem, t)
 }
 
 func TestReadProblemWithEmptyLine(t *testing.T) {
@@ -271,4 +273,72 @@ func TestReadProblemWithInvalidIndex(t *testing.T) {
 	}
 
 	_ = liblinear.ReadProblem(f, -1.0)
+}
+
+func TestReadProblemWithZeroIndex(t *testing.T) {
+	defer func() {
+		if msg := recover(); msg != nil {
+			assert.Equal(t, "Invalid index 0 on line 1", msg)
+		}
+	}()
+
+	var f *os.File
+	var err error
+	if f, err = ioutil.TempFile("", "train_tmp.txt"); err != nil {
+		t.Errorf("Unable to create temp file due to error %+v", err)
+	}
+
+	lines := []string{
+		"1 0:1 1:1",
+	}
+
+	test.WriteToFile(f, lines)
+
+	if f, err = os.Open(f.Name()); err != nil {
+		t.Errorf("Unable to read file %+v", err)
+	}
+
+	_ = liblinear.ReadProblem(f, -1.0)
+}
+
+func TestReadWrongProblem(t *testing.T) {
+	defer func() {
+		if msg := recover(); msg != nil {
+			assert.Equal(t, "Error with the token val a, err=strconv.ParseFloat: parsing \"a\": invalid syntax", msg)
+		}
+	}()
+
+	var f *os.File
+	var err error
+	if f, err = ioutil.TempFile("", "train_tmp.txt"); err != nil {
+		t.Errorf("Unable to create temp file due to error %+v", err)
+	}
+
+	lines := []string{
+		"1 1:1 3:1 4:1 6:1",
+		"2 2:1 3:1 5:1 7:1",
+		"1 3:1 5:a",
+	}
+
+	test.WriteToFile(f, lines)
+
+	if f, err = os.Open(f.Name()); err != nil {
+		t.Errorf("Unable to read file %+v", err)
+	}
+
+	_ = liblinear.ReadProblem(f, -1.0)
+}
+
+func validate(prob *liblinear.Problem, t *testing.T) {
+	for _, nodes := range prob.X {
+		assert.True(t, len(nodes) <= prob.N)
+		for _, node := range nodes {
+			if prob.Bias >= 0 && nodes[len(nodes)-1] == node {
+				assert.Equal(t, node.GetIndex(), prob.N)
+				assert.Equal(t, node.GetValue(), prob.Bias)
+			} else {
+				assert.True(t, node.GetIndex() < prob.N)
+			}
+		}
+	}
 }

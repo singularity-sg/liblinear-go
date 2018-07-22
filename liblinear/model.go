@@ -53,6 +53,6 @@ func (model *Model) GetFeatureWeights() []float64 {
 /**
  * @return true for logistic regression solvers
  */
-func (model *Model) isProbabilityModel() bool {
+func (model *Model) IsProbabilityModel() bool {
 	return model.SolverType.IsLogisticRegressionSolver()
 }

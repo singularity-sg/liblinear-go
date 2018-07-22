@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -74,7 +72,7 @@ func TestTrainPredict(t *testing.T) {
 				prediction := Predict(model, prob.X[i])
 				assert.Equal(t, value, prediction, fmt.Sprintf("assertion failed for solverType %v", model.SolverType.Name()))
 
-				if model.isProbabilityModel() {
+				if model.IsProbabilityModel() {
 					estimates := make([]float64, model.NumClass)
 					probabilityPrediction := PredictProbability(model, prob.X[i], estimates)
 					assert.Equal(t, prediction, probabilityPrediction)
@@ -101,7 +99,7 @@ func TestTrainPredict(t *testing.T) {
 func TestCrossValidation(t *testing.T) {
 	numClasses := random.Intn(10) + 1
 
-	prob := createRandomProblem(numClasses)
+	prob := CreateRandomProblem(numClasses)
 
 	param := NewParameter(L2R_LR, 10, 0.01, 0.1, 1000)
 	nrFold := 10
@@ -116,7 +114,7 @@ func TestCrossValidation(t *testing.T) {
 
 func TestLoadSaveModel(t *testing.T) {
 	for _, solverType := range SolverTypeValues() {
-		model := createRandomModel()
+		model := CreateRandomModel()
 		model.SolverType = solverType
 		fName := "modeltest-" + solverType.Name()
 
@@ -571,63 +569,4 @@ func writeLines(writer *bufio.Writer, lines []string) {
 		writer.WriteString(line + "\n")
 	}
 	writer.Flush()
-}
-
-func createRandomModel() *Model {
-	label := []int{1, math.MaxInt32, 2}
-	solverType := L2R_LR
-	w := make([]float64, len(label)*300)
-	for i := 0; i < len(w); i++ {
-		w[i] = round(random.Float64()*100000, 0, 0) / 10000
-	}
-	w[random.Int31n(int32(len(w)))] = 0.0
-	w[random.Int31n(int32(len(w)))] = -0.0
-
-	numFeature := len(w)/len(label) - 1
-	nrClass := len(label)
-
-	return NewModel(2, label, nrClass, numFeature, solverType, w)
-}
-
-func createRandomProblem(numClasses int) *Problem {
-	var l = random.Intn(100) + 1
-	var n = random.Intn(100) + 1
-	prob := NewProblem(l, n, make([]float64, l), make([][]Feature, l), -1.0)
-
-	for i := 0; i < prob.L; i++ {
-		prob.Y[i] = float64(random.Intn(numClasses))
-		randomNumbers := make(map[int]struct{})
-		num := random.Intn(prob.N) + 1
-		for j := 0; j < num; j++ {
-			randomNumbers[random.Intn(prob.N)+1] = struct{}{}
-		}
-
-		var randomIndices []int
-		for k := range randomNumbers {
-			randomIndices = append(randomIndices, k)
-		}
-
-		sort.Ints(randomIndices)
-
-		prob.X[i] = make([]Feature, len(randomIndices))
-		for j := 0; j < len(randomIndices); j++ {
-			prob.X[i][j] = NewFeatureNode(randomIndices[j], random.Float64())
-		}
-	}
-
-	return prob
-}
-
-func round(val float64, roundOn float64, places int) (newVal float64) {
-	var round float64
-	pow := math.Pow(10, float64(places))
-	digit := pow * val
-	_, div := math.Modf(digit)
-	if div >= roundOn {
-		round = math.Ceil(digit)
-	} else {
-		round = math.Floor(digit)
-	}
-	newVal = round / pow
-	return
 }
