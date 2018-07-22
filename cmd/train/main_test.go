@@ -32,7 +32,7 @@ func TestFindBestCOnIrisDataSet(t *testing.T) {
 
 func TestParseCommandLine(t *testing.T) {
 	for _, solverType := range liblinear.SolverTypeValues() {
-		training := parseTrainingFromArgs([]string{"-B=5.3", fmt.Sprintf("-s=%d", solverType.Id()), "-p=0.01", "-if=model-filename"})
+		training := parseTrainingFromArgs([]string{"-B=5.3", fmt.Sprintf("-s=%d", solverType.Id()), "-p=0.01", "-if=../../testdata/iris.scale"})
 		if training.FindC == true {
 			t.Errorf("FindC should be false")
 		}
@@ -81,7 +81,7 @@ func TestParseCommandLine(t *testing.T) {
 
 func TestFindCNoSolverSpecified(t *testing.T) {
 
-	os.Args = []string{"-C", "-of=../../testdata/iris.scale.model"}
+	os.Args = []string{"-C", "-if=../../testdata/iris.scale", "-of=../../testdata/iris.scale.model"}
 	train := parseTrainingFromArgs(os.Args)
 
 	if !train.FindC {
@@ -107,7 +107,7 @@ func TestFindCNoSolverSpecified(t *testing.T) {
 
 func TestFindCSolverAndNumFoldsSpecified(t *testing.T) {
 
-	os.Args = []string{"-s=0", "-v=10", "-C", "-of=../../testdata/iris.scale.model"}
+	os.Args = []string{"-s=0", "-v=10", "-C", "-if=../../testdata/iris.scale", "-of=../../testdata/iris.scale.model"}
 	train := parseTrainingFromArgs(os.Args)
 
 	if !train.FindC {
@@ -215,7 +215,7 @@ func TestReadProblemWithEmptyLine(t *testing.T) {
 	assert.Equal(t, len(problem.X), len(problem.Y))
 
 	assert.Equal(t, 4, len(problem.X[0]))
-	assert.Equal(t, 1, len(problem.X[1]))
+	assert.Equal(t, 0, len(problem.X[1]))
 }
 func TestReadProblemUnsorted(t *testing.T) {
 	defer func() {
