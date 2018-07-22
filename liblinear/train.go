@@ -2,10 +2,10 @@ package liblinear
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"log"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -83,18 +83,8 @@ func (t *Training) DoCrossValidation() {
 	}
 }
 
-//ReadProblem reads the file into the training problem field
-func (t *Training) ReadProblem() {
-	var err error
-	var f *os.File
-	if f, err = os.Open(t.InputFilename); err != nil {
-		log.Fatalf("Error while opening file %v, err=%v", f, err)
-	}
-	defer f.Close()
-	t.Prob = readProblem(f, t.Bias)
-}
-
-func readProblem(inputStream io.Reader, bias float64) *Problem {
+//ReadProblem reads the problem based on the inputstream and bias
+func ReadProblem(inputStream io.Reader, bias float64) *Problem {
 
 	var err error
 	scanner := bufio.NewScanner(inputStream)
@@ -122,22 +112,33 @@ func readProblem(inputStream io.Reader, bias float64) *Problem {
 			x = make([]Feature, m)
 		}
 
+		var prevKey int64
 		for i := 1; i < len(tokens); i++ {
 			t := tokens[i]
 
 			keyVal := strings.Split(t, ":")
 			if len(keyVal) != 2 {
-				log.Fatalf("Token format is incorrect %v", keyVal)
+				panic(fmt.Sprintf("Token format is incorrect %v", keyVal))
 			}
 
 			var key int64
 			if key, err = strconv.ParseInt(keyVal[0], 10, 32); err != nil {
-				log.Fatalf("Error with the token %d, err=%v", key, err)
+				panic(fmt.Sprintf("Error with the token %d, err=%v", key, err))
+			}
+
+			if key < 0 {
+				panic(fmt.Sprintf("Invalid index %d on line %d", key, lineNr))
+			}
+
+			if prevKey >= key {
+				panic(fmt.Sprintf("The indices must be sorted in ascending order (line %d)", lineNr))
+			} else {
+				prevKey = key
 			}
 
 			var val float64
 			if val, err = strconv.ParseFloat(keyVal[1], 64); err != nil {
-				log.Fatalf("Error with the token %f, err=%v", val, err)
+				panic(fmt.Sprintf("Error with the token %f, err=%v", val, err))
 			}
 
 			x[i-1] = NewFeatureNode(int(key), val)

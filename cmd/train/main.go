@@ -80,7 +80,7 @@ func parseTrainingFromArgs(args []string) *liblinear.Training {
 		default:
 			if flag[0:2] == "-w" {
 				weightLabel, _ := strconv.Atoi(flag[2:])
-				weight, _ := strconv.Atoi(val)
+				weight, _ := strconv.ParseFloat(val, 64)
 				param.WeightLabel = append(param.WeightLabel, weightLabel)
 				param.Weight = append(param.Weight, float64(weight))
 				break
@@ -134,6 +134,13 @@ func parseTrainingFromArgs(args []string) *liblinear.Training {
 		}
 	}
 
+	var f *os.File
+	if f, err = os.Open(inputFilename); err != nil {
+		log.Fatalf("Error while opening file %v, err=%v", f, err)
+	}
+	defer f.Close()
+	prob = liblinear.ReadProblem(f, bias)
+
 	return liblinear.NewTraining(bias, findC, cSpecified, solverSpecified, crossValidation, inputFilename, modelFilename, nrFold, param, prob)
 }
 
@@ -180,7 +187,6 @@ func exitWithHelp() {
 func main() {
 
 	training := parseTrainingFromArgs(os.Args)
-	training.ReadProblem()
 
 	if training.FindC {
 		training.DoFindParameterC()
