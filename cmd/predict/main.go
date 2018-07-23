@@ -140,8 +140,11 @@ func DoPredict(reader io.Reader, writer io.Writer, model *liblinear.Model) {
 }
 
 func exitWithHelp() {
-	log.Fatalf("Usage: predict [options] test_file model_file output_file\n" +
+	log.Fatalf("Usage: predict [options] -if=test_file -mf=model_file -of=output_file\n" +
 		"options:\n" +
+		"-if test_file\n" +
+		"-of output_file\n" +
+		"-mf model_file\n" +
 		"-b probability_estimates: whether to output probability estimates, 0 or 1 (default 0); currently for logistic regression only\n" +
 		"-q quiet mode (no outputs)\n")
 }
@@ -151,6 +154,7 @@ func main() {
 	var err error
 	var inputFile *os.File
 	var outputFile *os.File
+	var modelFile *os.File
 
 	for _, arg := range os.Args[1:] {
 
@@ -162,6 +166,10 @@ func main() {
 				flagPredictProbability = b != 0
 			} else {
 				exitWithHelp()
+			}
+		case "-mf":
+			if modelFile, err = os.Open(flagVal[1]); err != nil {
+				log.Fatalf("Unable to open modelfile %s", flagVal[1])
 			}
 		case "-if":
 			if inputFile, err = os.Open(flagVal[1]); err != nil {
@@ -179,6 +187,6 @@ func main() {
 		exitWithHelp()
 	}
 
-	model := liblinear.LoadModel(inputFile)
+	model := liblinear.LoadModel(modelFile)
 	DoPredict(inputFile, outputFile, model)
 }
