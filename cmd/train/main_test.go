@@ -41,7 +41,7 @@ func TestParseCommandLine(t *testing.T) {
 		}
 
 		param := training.Param
-		if param.SolverType != solverType {
+		if param.GetSolverType() != solverType {
 			t.Errorf("SolverType of param should be compatible with the training")
 		}
 
@@ -54,18 +54,18 @@ func TestParseCommandLine(t *testing.T) {
 		case 5:
 			fallthrough
 		case 6:
-			if param.Eps != 0.01 {
-				t.Errorf("The solvertype %d should have eps 0.01 but was %f", solverType.Id(), param.Eps)
+			if param.GetEps() != 0.01 {
+				t.Errorf("The solvertype %d should have eps 0.01 but was %f", solverType.Id(), param.GetEps())
 			}
 		case 11:
-			if param.Eps != 0.001 {
-				t.Errorf("The solvertype %d should have eps 0.001 but was %f", solverType.Id(), param.Eps)
+			if param.GetEps() != 0.001 {
+				t.Errorf("The solvertype %d should have eps 0.001 but was %f", solverType.Id(), param.GetEps())
 			}
 		case 7:
 			fallthrough
 		default:
-			if param.Eps != 0.1 {
-				t.Errorf("The solvertype %d should have eps 0.1 but was %f", solverType.Id(), param.Eps)
+			if param.GetEps() != 0.1 {
+				t.Errorf("The solvertype %d should have eps 0.1 but was %f", solverType.Id(), param.GetEps())
 			}
 
 			if training.Bias != 5.3 {
@@ -92,11 +92,11 @@ func TestFindCNoSolverSpecified(t *testing.T) {
 		t.Error("Number of Folds should be 5")
 	}
 
-	if train.Param.SolverType != liblinear.L2R_L2LOSS_SVC {
+	if train.Param.GetSolverType() != liblinear.L2R_L2LOSS_SVC {
 		t.Error("The solvertype should be L2R_L2LOSS_SVC")
 	}
 
-	if train.Param.Eps != 0.01 {
+	if train.Param.GetEps() != 0.01 {
 		t.Error("The param eps should be 0.01")
 	}
 
@@ -118,11 +118,11 @@ func TestFindCSolverAndNumFoldsSpecified(t *testing.T) {
 		t.Error("Number of Folds should be 10")
 	}
 
-	if train.Param.SolverType != liblinear.L2R_LR {
+	if train.Param.GetSolverType() != liblinear.L2R_LR {
 		t.Error("The solvertype should be L2R_LR")
 	}
 
-	if train.Param.Eps != 0.01 {
+	if train.Param.GetEps() != 0.01 {
 		t.Error("The param eps should be 0.01")
 	}
 
@@ -136,23 +136,23 @@ func TestParseWeights(t *testing.T) {
 	os.Args = []string{"-v=10", "-c=10", "-w1=1.234", "-if=../../testdata/iris.scale", "-of=../../testdata/iris.scale.model"}
 	train := parseTrainingFromArgs(os.Args)
 
-	if train.Param.WeightLabel[0] != 1 {
-		t.Errorf("Weight labels should be 1 but was %v", train.Param.WeightLabel[0])
+	if train.Param.GetWeightLabel(0) != 1 {
+		t.Errorf("Weight labels should be 1 but was %v", train.Param.GetWeightLabel(0))
 	}
 
-	if train.Param.Weight[0] != 1.234 {
-		t.Errorf("Weight should be 1.234 but was %v", train.Param.Weight[0])
+	if train.Param.GetWeight(0) != 1.234 {
+		t.Errorf("Weight should be 1.234 but was %v", train.Param.GetWeight(0))
 	}
 
 	os.Args = []string{"-w1=1.234", "-w2=0.12", "-w3=7", "-if=../../testdata/iris.scale", "-of=../../testdata/iris.scale.model"}
 	train = parseTrainingFromArgs(os.Args)
 
-	if !reflect.DeepEqual(train.Param.WeightLabel, []int{1, 2, 3}) {
+	if !reflect.DeepEqual(train.Param.GetWeightLabels(), []int{1, 2, 3}) {
 		t.Error("The weights labels should be [1,2,3]")
 	}
 
-	if !reflect.DeepEqual(train.Param.Weight, []float64{1.234, 0.12, 7}) {
-		t.Errorf("The weights should be [1.234, 0.12, 7] but was %v", train.Param.Weight)
+	if !reflect.DeepEqual(train.Param.GetWeights(), []float64{1.234, 0.12, 7}) {
+		t.Errorf("The weights should be [1.234, 0.12, 7] but was %v", train.Param.GetWeights())
 	}
 }
 

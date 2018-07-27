@@ -36,7 +36,7 @@ func (t *Training) DoFindParameterC() {
 	var maxC float64 = 1024
 
 	if t.CSpecified {
-		startC = t.Param.C
+		startC = t.Param.c
 	} else {
 		startC = -1.0
 	}
@@ -57,7 +57,7 @@ func (t *Training) DoCrossValidation() {
 	crossValidation(t.Prob, t.Param, t.NrFold, target)
 	log.Printf("time: %d ns\n", time.Now().Sub(start))
 
-	if t.Param.SolverType.IsSupportVectorRegression() {
+	if t.Param.solverType.IsSupportVectorRegression() {
 		for i := 0; i < t.Prob.L; i++ {
 			y := t.Prob.Y[i]
 			v := target[i]

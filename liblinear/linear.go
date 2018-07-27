@@ -134,9 +134,9 @@ func findParameterC(prob *Problem, param *Parameter, nrFold int, startC float64,
 	if startC <= 0 {
 		startC = calcStartC(prob, param)
 	}
-	param1.C = startC
+	param1.c = startC
 
-	for param1.C <= maxC {
+	for param1.c <= maxC {
 		for i := 0; i < nrFold; i++ {
 			begin := foldStart[i]
 			end := foldStart[i+1]
@@ -192,22 +192,22 @@ func findParameterC(prob *Problem, param *Parameter, nrFold int, startC float64,
 
 		currentRate := float64(totalCorrect) / float64(prob.L)
 		if currentRate > bestRate {
-			bestC = param1.C
+			bestC = param1.c
 			bestRate = currentRate
 		}
 
-		log.Printf("log2c=%7.2f\trate=%g\n", math.Log(param1.C)/math.Log(2.0), 100.0*currentRate)
+		log.Printf("log2c=%7.2f\trate=%g\n", math.Log(param1.c)/math.Log(2.0), 100.0*currentRate)
 		numUnchangedW++
 
 		if numUnchangedW == 3 {
 			break
 		}
 
-		param1.C = param1.C * ratio
+		param1.c = param1.c * ratio
 
 	}
 
-	if param1.C > maxC && maxC > startC {
+	if param1.c > maxC && maxC > startC {
 		log.Printf("warning: maximum C reached.\n")
 	}
 
@@ -331,7 +331,7 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 		}
 	}
 
-	if param.InitSol != nil && param.SolverType.Name() != L2R_LR.Name() && param.SolverType.Name() != L2R_L2LOSS_SVC.Name() {
+	if param.InitSol != nil && param.solverType.Name() != L2R_LR.Name() && param.solverType.Name() != L2R_L2LOSS_SVC.Name() {
 		panic("Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC")
 	}
 
@@ -347,10 +347,10 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 		model.NumFeatures = n
 	}
 
-	model.SolverType = param.SolverType
+	model.SolverType = param.solverType
 	model.Bias = prob.Bias
 
-	if param.SolverType.IsSupportVectorRegression() {
+	if param.solverType.IsSupportVectorRegression() {
 		model.W = make([]float64, wSize)
 		model.NumClass = 2
 		model.Label = nil
@@ -379,19 +379,19 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 		// calculate weighted C
 		weightedC := make([]float64, nrClass)
 		for i := 0; i < nrClass; i++ {
-			weightedC[i] = param.C
+			weightedC[i] = param.c
 		}
 		for i := 0; i < param.GetNumWeights(); i++ {
 			var j int
 			for j = 0; j < nrClass; j++ {
-				if param.WeightLabel[i] == label[j] {
+				if param.weightLabel[i] == label[j] {
 					break
 				}
 			}
 			if j == nrClass {
-				panic(fmt.Sprintf("class label %d specified in weight is not found", param.WeightLabel[i]))
+				panic(fmt.Sprintf("class label %d specified in weight is not found", param.weightLabel[i]))
 			}
-			weightedC[j] *= param.Weight[i]
+			weightedC[j] *= param.weight[i]
 		}
 
 		// constructing the subproblem
@@ -407,7 +407,7 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 		}
 
 		// multi-class svm by Crammer and Singer
-		if param.SolverType == MCSVM_CS {
+		if param.solverType == MCSVM_CS {
 			model.W = make([]float64, n*nrClass)
 			for i := 0; i < nrClass; i++ {
 				for j := start[i]; j < start[i]+count[i]; j++ {
@@ -415,7 +415,7 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 				}
 			}
 
-			solver := NewSolverMCSVMCS(subProb, nrClass, weightedC, param.Eps, 100000)
+			solver := NewSolverMCSVMCS(subProb, nrClass, weightedC, param.eps, 100000)
 			solver.solve(model.W)
 		} else {
 			if nrClass == 2 {
@@ -469,7 +469,7 @@ func Train(prob *Problem, param *Parameter) (*Model, error) {
 						}
 					}
 
-					trainOne(subProb, param, w, weightedC[i], param.C)
+					trainOne(subProb, param, w, weightedC[i], param.c)
 
 					for j := 0; j < n; j++ {
 						model.W[j*nrClass+i] = w[j]
@@ -498,9 +498,9 @@ func calcStartC(prob *Problem, param *Parameter) float64 {
 	}
 
 	minC := 1.0
-	if param.SolverType == L2R_LR {
+	if param.solverType == L2R_LR {
 		minC = 1.0 / (float64(prob.L) * maxXTx)
-	} else if param.SolverType == L2R_L2LOSS_SVC {
+	} else if param.solverType == L2R_L2LOSS_SVC {
 		minC = 1.0 / (2 * float64(prob.L) * maxXTx)
 	}
 
@@ -508,7 +508,7 @@ func calcStartC(prob *Problem, param *Parameter) float64 {
 }
 
 func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float64) {
-	eps := param.Eps
+	eps := param.eps
 	epsCg := 0.1
 
 	if param.InitSol != nil {
@@ -525,7 +525,7 @@ func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float
 	neg := prob.L - pos
 	primalSolverTol := eps * math.Max(math.Min(float64(pos), float64(neg)), 1) / float64(prob.L)
 
-	switch param.SolverType {
+	switch param.solverType {
 
 	case L2R_LR:
 		c := make([]float64, prob.L, prob.L)
@@ -570,11 +570,11 @@ func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float
 	case L2R_L2LOSS_SVR:
 		c := make([]float64, prob.L)
 		for i := 0; i < prob.L; i++ {
-			c[i] = param.C
+			c[i] = param.c
 		}
 
 		funObj := NewL2RL2SvrFunc(prob, c, param.P)
-		tronObj := NewTron(funObj, param.Eps, param.MaxIters, epsCg)
+		tronObj := NewTron(funObj, param.eps, param.MaxIters, epsCg)
 		tronObj.tron(w)
 	case L2R_L1LOSS_SVR_DUAL:
 		fallthrough
@@ -582,16 +582,16 @@ func trainOne(prob *Problem, param *Parameter, w []float64, cp float64, cn float
 		solveL2RL1L2Svr(prob, w, param)
 
 	default:
-		panic(fmt.Sprintf("unknown solver type : %+v", param.SolverType))
+		panic(fmt.Sprintf("unknown solver type : %+v", param.solverType))
 	}
 }
 
 func solveL2RL1L2Svr(prob *Problem, w []float64, param *Parameter) {
 	l := prob.L
-	C := param.C
+	C := param.c
 	p := param.P
 	wSize := prob.N
-	eps := param.Eps
+	eps := param.eps
 	var i, s, iter int
 	maxIter := param.MaxIters
 	activeSize := l
@@ -609,7 +609,7 @@ func solveL2RL1L2Svr(prob *Problem, w []float64, param *Parameter) {
 	lambda := []float64{0.5 / C}
 	upperBound := []float64{math.Inf(1)}
 
-	if param.SolverType == L2R_L1LOSS_SVR_DUAL {
+	if param.solverType == L2R_L1LOSS_SVR_DUAL {
 		lambda[0] = 0
 		upperBound[0] = C
 	}

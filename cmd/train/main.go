@@ -45,17 +45,17 @@ func parseTrainingFromArgs(args []string) *liblinear.Training {
 		switch flag {
 		case "-s":
 			id, _ := strconv.Atoi(val)
-			param.SolverType = liblinear.GetById(id)
+			param.SetSolverType(liblinear.GetById(id))
 			solverSpecified = true
 		case "-c":
 			c, _ := strconv.Atoi(val)
-			param.C = float64(c)
+			param.SetC(float64(c))
 			cSpecified = true
 		case "-p":
 			param.P, _ = strconv.ParseFloat(val, 64)
 		case "-e":
 			eps, _ := strconv.Atoi(val)
-			param.Eps = float64(eps)
+			param.SetEps(float64(eps))
 		case "-B":
 			var b float64
 			if b, err = strconv.ParseFloat(val, 64); err != nil {
@@ -81,8 +81,7 @@ func parseTrainingFromArgs(args []string) *liblinear.Training {
 			if flag[0:2] == "-w" {
 				weightLabel, _ := strconv.Atoi(flag[2:])
 				weight, _ := strconv.ParseFloat(val, 64)
-				param.WeightLabel = append(param.WeightLabel, weightLabel)
-				param.Weight = append(param.Weight, float64(weight))
+				param.AddWeight(weight, weightLabel)
 				break
 			}
 			log.Fatalf("Unknown option : %c", args[i][1])
@@ -98,21 +97,21 @@ func parseTrainingFromArgs(args []string) *liblinear.Training {
 		}
 		if !solverSpecified {
 			log.Println("Solver not specified. Using -s 2")
-			param.SolverType = liblinear.L2R_L2LOSS_SVC
-		} else if param.SolverType != liblinear.L2R_LR && param.SolverType != liblinear.L2R_L2LOSS_SVC {
+			param.SetSolverType(liblinear.L2R_L2LOSS_SVC)
+		} else if param.GetSolverType() != liblinear.L2R_LR && param.GetSolverType() != liblinear.L2R_L2LOSS_SVC {
 			log.Fatal("Warm-start parameter search only available for -s 0 and -s 2")
 			// exitWithHelp()
 		}
 	}
 
-	if param.Eps == math.Inf(1) {
-		switch param.SolverType {
+	if param.GetEps() == math.Inf(1) {
+		switch param.GetSolverType() {
 		case liblinear.L2R_LR:
 			fallthrough
 		case liblinear.L2R_L2LOSS_SVC:
-			param.Eps = 0.01
+			param.SetEps(0.01)
 		case liblinear.L2R_L2LOSS_SVR:
-			param.Eps = 0.001
+			param.SetEps(0.001)
 		case liblinear.L2R_L2LOSS_SVC_DUAL:
 			fallthrough
 		case liblinear.L2R_L1LOSS_SVC_DUAL:
@@ -120,17 +119,17 @@ func parseTrainingFromArgs(args []string) *liblinear.Training {
 		case liblinear.MCSVM_CS:
 			fallthrough
 		case liblinear.L2R_LR_DUAL:
-			param.Eps = 0.1
+			param.SetEps(0.1)
 		case liblinear.L1R_L2LOSS_SVC:
 			fallthrough
 		case liblinear.L1R_LR:
-			param.Eps = 0.01
+			param.SetEps(0.01)
 		case liblinear.L2R_L1LOSS_SVR_DUAL:
 			fallthrough
 		case liblinear.L2R_L2LOSS_SVR_DUAL:
-			param.Eps = 0.1
+			param.SetEps(0.1)
 		default:
-			log.Fatalf("unknown solver type %v", param.SolverType)
+			log.Fatalf("unknown solver type %v", param.GetSolverType())
 		}
 	}
 
