@@ -163,11 +163,14 @@ func exitWithHelp() {
 		"-c cost : set the parameter C (default 1)\n" +
 		"-p epsilon : set the epsilon in loss function of SVR (default 0.1)\n" +
 		"-e epsilon : set tolerance of termination criterion\n" +
-		"   -s 0 and 2\\n" + "       |f'(w)|_2 <= eps*min(pos,neg)/l*|f'(w0)|_2,\n" +
-		"       where f is the primal function and pos/neg are # of\n" +
-		"       positive/negative data (default 0.01)\\n" + "   -s 11\n" +
-		"       |f'(w)|_2 <= eps*|f'(w0)|_2 (default 0.001)\n" +
-		"   -s 1, 3, 4 and 7\\n" + "       Dual maximal violation <= eps; similar to libsvm (default 0.1)\n" +
+		"   -s 0 and 2\n" +
+		"      |f'(w)|_2 <= eps*min(pos,neg)/l*|f'(w0)|_2,\n" +
+		"      where f is the primal function and pos/neg are # of\n" +
+		"      positive/negative data (default 0.01)\n" +
+		"   -s 11\n" +
+		"      |f'(w)|_2 <= eps*|f'(w0)|_2 (default 0.001)\n" +
+		"   -s 1, 3, 4 and 7\n" +
+		"      Dual maximal violation <= eps; similar to libsvm (default 0.1)\n" +
 		"   -s 5 and 6\n" +
 		"       |f'(w)|_1 <= eps*min(pos,neg)/l*|f'(w0)|_1,\n" +
 		"       where f is the primal function (default 0.01)\n" +

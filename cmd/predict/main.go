@@ -179,6 +179,11 @@ func main() {
 			if outputFile, err = os.Open(flagVal[1]); err != nil {
 				log.Fatalf("Unable to open outputfile %s", flagVal[1])
 			}
+		case "-h", "-help":
+			fallthrough
+		default:
+			exitWithHelp()
+
 		}
 
 	}
